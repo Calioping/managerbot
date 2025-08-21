@@ -1700,7 +1700,181 @@ defineCommand('nolog', async (msg) => {
 });
 
 // Giveaways (stubs)
-defineCommand('giveaway', async (msg) => { await msg.channel.send('Système de giveaway en cours d\'implémentation.'); });
+defineCommand('giveaway', async (msg) => {
+    if (!requireOwner(msg)) return;
+
+    function buildSettingsEmbed(settings) {
+        const lines = [
+            'Settings Giveaway',
+            `Salon\n${settings.channelId ? `<#${settings.channelId}>` : 'Aucun'}`,
+            `Prix\n${settings.prize || 'Aucun'}`,
+            `Titre du message\n${settings.title}`,
+            `Description du message\n${settings.description}`,
+            `Réaction\n${settings.reaction}`,
+            `Se termine dans\n${settings.durationText}`,
+            `Nombre de gagnants\n${settings.numWinners}`,
+            `Lanceur du giveaway\n${settings.requireLauncher ? 'Oui' : 'Non'}`,
+            `Gagnant imposé\n${settings.forcedWinnerId ? `<@${settings.forcedWinnerId}>` : 'Non'}`
+        ].join('\n');
+        return new EmbedBuilder()
+            .setTitle('Settings Giveaway')
+            .setDescription(lines)
+            .setColor(0xFF0000);
+    }
+
+    function buildMenu(customId) {
+        return new ActionRowBuilder().addComponents(
+            new StringSelectMenuBuilder()
+                .setCustomId(customId)
+                .setPlaceholder('Modifier/Lancer')
+                .addOptions(
+                    { label: 'Salon', value: 'channel' },
+                    { label: 'Prix', value: 'prize' },
+                    { label: 'Titre du message', value: 'title' },
+                    { label: 'Description du message', value: 'description' },
+                    { label: 'Réaction', value: 'reaction' },
+                    { label: 'Durée', value: 'duration' },
+                    { label: 'Nombre de gagnants', value: 'winners' },
+                    { label: 'Lanceur du giveaway', value: 'launcher' },
+                    { label: 'Gagnant imposé', value: 'forced' },
+                    { label: 'Lancer le giveaway', value: 'start' }
+                )
+        );
+    }
+
+    function parseDurationToMs(text) {
+        const m = String(text).trim().match(/^(\d+)\s*(s|m|h|d)$/i);
+        if (!m) return null;
+        const n = parseInt(m[1], 10);
+        const unit = m[2].toLowerCase();
+        if (unit === 's') return n * 1000;
+        if (unit === 'm') return n * 60 * 1000;
+        if (unit === 'h') return n * 60 * 60 * 1000;
+        if (unit === 'd') return n * 24 * 60 * 60 * 1000;
+        return null;
+    }
+
+    function extractEmojiIdentifier(input) {
+        const trimmed = input.trim();
+        const custom = trimmed.match(/^<a?:([A-Za-z0-9_]+):(\d+)>$/);
+        if (custom) return `${custom[1]}:${custom[2]}`;
+        return trimmed; // assume unicode
+    }
+
+    const settings = {
+        channelId: null,
+        prize: '',
+        title: '🎉 **GIVEAWAY** 🎉',
+        description: 'Réagis avec 🎉 pour participer au giveaway',
+        reaction: '🎉',
+        durationText: '12h',
+        durationMs: 12 * 60 * 60 * 1000,
+        numWinners: 1,
+        requireLauncher: false,
+        forcedWinnerId: null
+    };
+
+    const embed = buildSettingsEmbed(settings);
+    const menuId = `gw_menu:${msg.id}:${Date.now()}`;
+    const sent = await msg.channel.send({ embeds: [embed], components: [buildMenu(menuId)] });
+
+    const componentCollector = sent.createMessageComponentCollector({ time: 10 * 60 * 1000 });
+    componentCollector.on('collect', async (i) => {
+        if (i.user.id !== msg.author.id) return i.reply({ content: 'Seul l\'auteur peut modifier ces paramètres.', ephemeral: true });
+        if (i.customId !== menuId) return;
+        const choice = i.values[0];
+        const ask = async (question) => {
+            const q = await msg.channel.send(question);
+            const filter = (m) => m.author.id === msg.author.id && m.channelId === msg.channelId;
+            const collected = await msg.channel.awaitMessages({ filter, max: 1, time: 60_000 });
+            const answer = collected.first();
+            if (!answer) { try { await q.delete().catch(()=>{}); } catch {} return null; }
+            const value = answer.content.trim();
+            try { await answer.delete().catch(()=>{}); } catch {}
+            try { await q.delete().catch(()=>{}); } catch {}
+            return value;
+        };
+
+        if (choice === 'channel') {
+            await i.deferUpdate();
+            const value = await ask('Dans quel salon publier le giveaway ? Mentionne un salon ou donne un ID.');
+            if (!value) return;
+            let channelId = value.replace(/[^0-9]/g, '');
+            const ch = msg.guild.channels.cache.get(channelId) || msg.mentions.channels.first();
+            if (!ch) return;
+            settings.channelId = ch.id;
+        } else if (choice === 'prize') {
+            await i.deferUpdate();
+            const value = await ask('Quel est le prix du giveaway ?');
+            if (!value) return;
+            settings.prize = value;
+        } else if (choice === 'title') {
+            await i.deferUpdate();
+            const value = await ask('Quel est le titre du message ?');
+            if (!value) return;
+            settings.title = value.slice(0, 256);
+        } else if (choice === 'description') {
+            await i.deferUpdate();
+            const value = await ask('Quelle est la description du message ?');
+            if (!value) return;
+            settings.description = value.slice(0, 1900);
+        } else if (choice === 'reaction') {
+            await i.deferUpdate();
+            const value = await ask('Quelle réaction utiliser ? (emoji unique)');
+            if (!value) return;
+            settings.reaction = value.trim();
+        } else if (choice === 'duration') {
+            await i.deferUpdate();
+            const value = await ask('Combien va durer le giveaway ? (ex: 12h, 30m, 2d)');
+            if (!value) return;
+            const ms = parseDurationToMs(value);
+            if (!ms) return;
+            settings.durationText = value;
+            settings.durationMs = ms;
+        } else if (choice === 'winners') {
+            await i.deferUpdate();
+            const value = await ask('Combien de gagnants ? (nombre entier)');
+            if (!value) return;
+            const n = parseInt(value, 10);
+            if (!Number.isFinite(n) || n < 1 || n > 50) return;
+            settings.numWinners = n;
+        } else if (choice === 'launcher') {
+            await i.deferUpdate();
+            const value = await ask('Activer le lanceur du giveaway ? (oui/non)');
+            if (!value) return;
+            settings.requireLauncher = /^oui$/i.test(value);
+        } else if (choice === 'forced') {
+            await i.deferUpdate();
+            const value = await ask('Gagnant imposé ? (mention/ID ou "non")');
+            if (!value) return;
+            if (/^non$/i.test(value)) settings.forcedWinnerId = null;
+            else {
+                const id = value.replace(/[^0-9]/g, '');
+                settings.forcedWinnerId = id || null;
+            }
+        } else if (choice === 'start') {
+            await i.deferUpdate();
+            const channel = (settings.channelId && msg.guild.channels.cache.get(settings.channelId)) || msg.channel;
+            const gwEmbed = new EmbedBuilder()
+                .setTitle(settings.title)
+                .setDescription(settings.description)
+                .setColor(0xFF0000)
+                .addFields(
+                    settings.prize ? [{ name: 'Prix', value: settings.prize, inline: true }] : [],
+                    [{ name: 'Durée', value: settings.durationText, inline: true }, { name: 'Gagnants', value: String(settings.numWinners), inline: true }]
+                );
+            const gwMsg = await channel.send({ embeds: [gwEmbed] });
+            const emojiIdent = extractEmojiIdentifier(settings.reaction);
+            try { await gwMsg.react(emojiIdent); } catch {}
+            return;
+        }
+
+        // Refresh settings embed after change
+        try {
+            await sent.edit({ embeds: [buildSettingsEmbed(settings)] });
+        } catch {}
+    });
+});
 defineCommand('end giveaway', async (msg) => { await msg.channel.send('Fin de giveaway en cours d\'implémentation.'); });
 defineCommand('reroll', async (msg) => { await msg.channel.send('Reroll en cours d\'implémentation.'); });
 
