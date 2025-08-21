@@ -817,6 +817,19 @@ defineCommand('pic', async (msg) => {
     
     await msg.channel.send({ embeds: [embed] });
 });
+// Server media commands
+defineCommand('server pic', async (msg) => {
+    const url = msg.guild.iconURL({ size: 1024 });
+    if (!url) return void msg.channel.send('Aucune icône pour ce serveur.');
+    const embed = new EmbedBuilder().setTitle(`Icône de ${msg.guild.name}`).setImage(url).setColor(getThemeColorForGuild(msg.guild.id));
+    await msg.channel.send({ embeds: [embed] });
+});
+defineCommand('server banner', async (msg) => {
+    const url = msg.guild.bannerURL({ size: 1024 });
+    if (!url) return void msg.channel.send('Aucune bannière pour ce serveur.');
+    const embed = new EmbedBuilder().setTitle(`Bannière de ${msg.guild.name}`).setImage(url).setColor(getThemeColorForGuild(msg.guild.id));
+    await msg.channel.send({ embeds: [embed] });
+});
 defineCommand('support', async (msg) => {
     await msg.channel.send('Support: https://discord.gg/dN8pU5hXcC');
 });
