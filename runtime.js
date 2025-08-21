@@ -1319,7 +1319,36 @@ defineCommand('antieveryone', async (msg) => { if (!requireOwner(msg)) return; c
 defineCommand('blrank', async (msg) => { if (!requireOwner(msg)) return; await msg.channel.send('blrank paramétré.'); });
 defineCommand('punition', async (msg) => { if (!requireOwner(msg)) return; const val = (msg.content.split(/\s+/)[1] || '').toLowerCase(); const cfg = getGuildConfig(msg.guild.id); cfg.settings.antiraid.punition = ['ban','kick','strip'].includes(val)?val:'kick'; saveGuildConfig(msg.guild.id, cfg); await msg.channel.send('Punition mise à jour.'); });
 defineCommand('creation limit', async (msg) => { if (!requireOwner(msg)) return; const val = parseInt(msg.content.split(/\s+/)[2]||'0',10); const cfg = getGuildConfig(msg.guild.id); cfg.settings.antiraid.creationLimitMs = Math.max(0, val)*1000; saveGuildConfig(msg.guild.id, cfg); await msg.channel.send('Limite de création mise à jour.'); });
-defineCommand('wl', async (msg) => { if (!requireOwner(msg)) return; const id = (msg.mentions.users.first()?.id) || (msg.mentions.roles.first()?.id) || msg.content.split(/\s+/)[1]; const cfg = getGuildConfig(msg.guild.id); if (!id) return void msg.channel.send('Usage: +wl <@user/@role/ID>'); if (msg.mentions.roles.first()) { if (!cfg.settings.antiraid.whitelist.roles.includes(id)) cfg.settings.antiraid.whitelist.roles.push(id); } else { if (!cfg.settings.antiraid.whitelist.users.includes(id)) cfg.settings.antiraid.whitelist.users.push(id); } saveGuildConfig(msg.guild.id, cfg); await msg.channel.send('Ajouté à la whitelist.'); });
+defineCommand('wl', async (msg) => {
+    if (!requireOwner(msg)) return;
+    const parts = msg.content.split(/\s+/).slice(1);
+    const cfg = getGuildConfig(msg.guild.id);
+
+    // Liste si aucun argument
+    if (parts.length === 0 || (!msg.mentions.users.size && !msg.mentions.roles.size && !parts[0])) {
+        const userMentions = (cfg.settings.antiraid.whitelist.users || []).map(id => `<@${id}>`);
+        const roleMentions = (cfg.settings.antiraid.whitelist.roles || []).map(id => `<@&${id}>`);
+        const embed = new EmbedBuilder()
+            .setTitle('Whitelist')
+            .addFields(
+                { name: 'Membres', value: userMentions.length ? userMentions.join('\n') : 'Aucun', inline: false },
+                { name: 'Rôles', value: roleMentions.length ? roleMentions.join('\n') : 'Aucun', inline: false }
+            )
+            .setColor(0xFF0000);
+        return void msg.channel.send({ embeds: [embed] });
+    }
+
+    // Ajout si argument
+    const id = (msg.mentions.users.first()?.id) || (msg.mentions.roles.first()?.id) || parts[0];
+    if (!id) return void msg.channel.send('Usage: +wl <@user/@role/ID>');
+    if (msg.mentions.roles.first()) {
+        if (!cfg.settings.antiraid.whitelist.roles.includes(id)) cfg.settings.antiraid.whitelist.roles.push(id);
+    } else {
+        if (!cfg.settings.antiraid.whitelist.users.includes(id)) cfg.settings.antiraid.whitelist.users.push(id);
+    }
+    saveGuildConfig(msg.guild.id, cfg);
+    await msg.channel.send('Ajouté à la whitelist.');
+});
 defineCommand('unwl', async (msg) => { if (!requireOwner(msg)) return; const id = (msg.mentions.users.first()?.id) || (msg.mentions.roles.first()?.id) || msg.content.split(/\s+/)[1]; const cfg = getGuildConfig(msg.guild.id); cfg.settings.antiraid.whitelist.users = cfg.settings.antiraid.whitelist.users.filter(x=>x!==id); cfg.settings.antiraid.whitelist.roles = cfg.settings.antiraid.whitelist.roles.filter(x=>x!==id); saveGuildConfig(msg.guild.id, cfg); await msg.channel.send('Retiré de la whitelist.'); });
 defineCommand('clear wl', async (msg) => { if (!requireOwner(msg)) return; const cfg = getGuildConfig(msg.guild.id); cfg.settings.antiraid.whitelist = { users: [], roles: [] }; saveGuildConfig(msg.guild.id, cfg); await msg.channel.send('Whitelist vidée.'); });
 
