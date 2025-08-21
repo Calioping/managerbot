@@ -1288,7 +1288,14 @@ defineCommand('updatebot', async (msg) => {
         const fileContent = fs.readFileSync(__filename, 'utf8');
         const currentLineCount = fileContent.split('\n').length;
         const db = readStore();
-        const previousLineCount = db.lastRuntimeLineCount || 0;
+        const previousLineCount = typeof db.lastRuntimeLineCount === 'number' ? db.lastRuntimeLineCount : null;
+        // Première exécution: mémoriser et ne pas redémarrer
+        if (previousLineCount === null) {
+            db.lastRuntimeLineCount = currentLineCount;
+            writeStore(db);
+            await msg.channel.send('Le bot est déjà à jour.');
+            return;
+        }
         if (currentLineCount > previousLineCount) {
             db.lastRuntimeLineCount = currentLineCount;
             writeStore(db);
@@ -1301,6 +1308,7 @@ defineCommand('updatebot', async (msg) => {
         await msg.channel.send('Le bot est déjà à jour.');
     }
 });
+defineCommand('update', async (msg) => { const fn = commands.get('updatebot'); if (fn) return fn(msg); });
 defineCommand('reset server', async (msg) => { if (!requireOwner(msg)) return; await msg.channel.send('La base de donnée du serveur a été supprimée'); removeGuildConfig(msg.guild.id); });
 defineCommand('resetall', async (msg) => { if (!requireOwner(msg)) return; await msg.channel.send('La base de donnée du bot a été supprimée.'); writeStore({ guilds: {} }); });
 
