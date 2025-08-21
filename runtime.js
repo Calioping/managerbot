@@ -1285,14 +1285,23 @@ defineCommand('secur invite', async (msg) => { if (!requireOwner(msg)) return; c
 defineCommand('updatebot', async (msg) => {
     if (!requireOwner(msg)) return;
     try {
-        const fs = require('fs');
-        const file = __filename;
-        const before = fs.statSync(file).mtimeMs;
-        // Simulate update check: re-read file
-        const content = fs.readFileSync(file, 'utf8');
-        const after = fs.statSync(file).mtimeMs;
-        if (after > before || content.length !== 0) {
+        const cp = require('child_process');
+        try { cp.execSync('git fetch', { cwd: process.cwd(), stdio: 'pipe' }); } catch {}
+        let branch = '';
+        try { branch = cp.execSync('git rev-parse --abbrev-ref HEAD', { cwd: process.cwd(), stdio: 'pipe' }).toString().trim(); } catch {}
+        let diff = '';
+        try { diff = cp.execSync(`git diff --numstat HEAD..origin/${branch}`, { cwd: process.cwd(), stdio: 'pipe' }).toString(); } catch {}
+        let added = 0;
+        if (diff) {
+            for (const line of diff.trim().split('\n')) {
+                const parts = line.trim().split(/\s+/);
+                const a = parseInt(parts[0], 10);
+                if (!isNaN(a)) added += a;
+            }
+        }
+        if (added > 0) {
             await msg.channel.send('Redémarrage...');
+            try { cp.execSync('git pull --ff-only', { cwd: process.cwd(), stdio: 'pipe' }); } catch {}
             process.exit(42);
         } else {
             await msg.channel.send('Le bot est déjà à jour.');
@@ -1301,8 +1310,8 @@ defineCommand('updatebot', async (msg) => {
         await msg.channel.send('Le bot est déjà à jour.');
     }
 });
-defineCommand('reset server', async (msg) => { if (!requireOwner(msg)) return; removeGuildConfig(msg.guild.id); await msg.channel.send('La base de donnée du serveur a été supprimée'); });
-defineCommand('resetall', async (msg) => { if (!requireOwner(msg)) return; writeStore({ guilds: {} }); await msg.channel.send('La base de donnée du bot a été supprimée.'); });
+defineCommand('reset server', async (msg) => { if (!requireOwner(msg)) return; await msg.channel.send('La base de donnée du serveur a été supprimée'); removeGuildConfig(msg.guild.id); });
+defineCommand('resetall', async (msg) => { if (!requireOwner(msg)) return; await msg.channel.send('La base de donnée du bot a été supprimée.'); writeStore({ guilds: {} }); });
 
 defineCommand('raidlog', async (msg) => { if (!requireOwner(msg)) return; const parts = msg.content.split(/\s+/); const onoff = (parts[1] || '').toLowerCase(); const cfg = getGuildConfig(msg.guild.id); if (onoff === 'on') cfg.settings.antiraid.raidlogChannelId = (msg.mentions.channels.first()?.id) || msg.channel.id; else if (onoff === 'off') cfg.settings.antiraid.raidlogChannelId = null; saveGuildConfig(msg.guild.id, cfg); await msg.channel.send('Raidlog mis à jour.'); });
 defineCommand('raidping', async (msg) => { if (!requireOwner(msg)) return; const r = msg.mentions.roles.first(); const cfg = getGuildConfig(msg.guild.id); cfg.settings.antiraid.raidpingRoleId = r?.id || null; saveGuildConfig(msg.guild.id, cfg); await msg.channel.send('Raid ping mis à jour.'); });
