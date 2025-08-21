@@ -985,22 +985,103 @@ defineCommand('choose', async (msg) => {
 });
 
 defineCommand('embed', async (msg) => {
-    const text = msg.content.slice((process.env.CHILD_PREFIX || PREFIX).length + 'embed'.length).trim();
-    if (!text) {
-        const embed = new EmbedBuilder()
-            .setTitle('Générateur d\'embed')
-            .setDescription('Fournis un texte.')
-            .setColor(getThemeColorForGuild(msg.guild.id));
-        
-        return void msg.channel.send({ embeds: [embed] });
+    if (!requireOwner(msg)) return;
+    let state = {
+        title: '', description: '', author: '', footer: '', thumbnail: '', timestamp: false, image: '', url: '', color: getThemeColorForGuild(msg.guild.id)
+    };
+
+    function buildPreview() {
+        const e = new EmbedBuilder().setColor(state.color || 0xFF0000);
+        if (state.title) e.setTitle(state.title);
+        if (state.description) e.setDescription(state.description);
+        if (state.author) e.setAuthor({ name: state.author });
+        if (state.footer) e.setFooter({ text: state.footer });
+        if (state.thumbnail) e.setThumbnail(state.thumbnail);
+        if (state.image) e.setImage(state.image);
+        if (state.url) e.setURL(state.url);
+        if (state.timestamp) e.setTimestamp(new Date());
+        return e;
     }
-    
-    const color = getGuildConfig(msg.guild.id).settings.themeColor;
-    const embed = new EmbedBuilder()
-        .setDescription(text)
-        .setColor(color);
-    
-    await msg.channel.send({ embeds: [embed] });
+
+    function buildMenu(customId) {
+        return new ActionRowBuilder().addComponents(
+            new StringSelectMenuBuilder()
+                .setCustomId(customId)
+                .setPlaceholder('Modifier l\'embed')
+                .addOptions(
+                    { label: 'Modifier le titre', value: 'title' },
+                    { label: 'Modifier la description', value: 'description' },
+                    { label: 'Modifier l\'auteur', value: 'author' },
+                    { label: 'Modifier le footer', value: 'footer' },
+                    { label: 'Modifier le thumbnail', value: 'thumbnail' },
+                    { label: 'Modifier le timestamp', value: 'timestamp' },
+                    { label: 'Modifier l\'image', value: 'image' },
+                    { label: 'Modifier l\'url', value: 'url' },
+                    { label: 'Modifier la couleur', value: 'color' }
+                )
+        );
+    }
+
+    function buildSendRow() {
+        return new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('embed_send').setLabel('Envoyer l\'embed').setStyle(ButtonStyle.Success)
+        );
+    }
+
+    const menuId = `embed_menu:${msg.id}:${Date.now()}`;
+    const sent = await msg.channel.send({ embeds: [buildPreview()], components: [buildMenu(menuId), buildSendRow()] });
+
+    const componentCollector = sent.createMessageComponentCollector({ time: 10 * 60 * 1000 });
+
+    const ask = async (question) => {
+        const q = await msg.channel.send(question);
+        const filter = (m) => m.author.id === msg.author.id && m.channelId === msg.channelId;
+        const collected = await msg.channel.awaitMessages({ filter, max: 1, time: 60_000 });
+        const answer = collected.first();
+        if (!answer) { try { await q.delete().catch(()=>{}); } catch {} return null; }
+        const value = answer.content.trim();
+        try { await answer.delete().catch(()=>{}); } catch {}
+        try { await q.delete().catch(()=>{}); } catch {}
+        return value;
+    };
+
+    componentCollector.on('collect', async (i) => {
+        if (i.user.id !== msg.author.id) return i.reply({ content: 'Seul l\'auteur peut modifier cet embed.', ephemeral: true });
+        if (i.customId === 'embed_send') {
+            await i.deferUpdate();
+            const target = await ask('Dans quel channel voulez-vous envoyer l\'embed? (mention/ID)');
+            if (!target) return;
+            const id = target.replace(/[^0-9]/g, '');
+            const ch = msg.guild.channels.cache.get(id) || msg.mentions.channels.first();
+            if (!ch) return;
+            await ch.send({ embeds: [buildPreview()] });
+            await msg.channel.send(`L'embed a été envoyé dans le salon ${ch}`);
+            return;
+        }
+        if (i.customId !== menuId) return;
+        const choice = i.values[0];
+        await i.deferUpdate();
+        if (choice === 'title') {
+            const v = await ask('Nouveau titre :'); if (v===null) return; state.title = v.slice(0, 256);
+        } else if (choice === 'description') {
+            const v = await ask('Nouvelle description :'); if (v===null) return; state.description = v.slice(0, 4000);
+        } else if (choice === 'author') {
+            const v = await ask('Auteur :'); if (v===null) return; state.author = v.slice(0, 256);
+        } else if (choice === 'footer') {
+            const v = await ask('Footer :'); if (v===null) return; state.footer = v.slice(0, 2048);
+        } else if (choice === 'thumbnail') {
+            const v = await ask('URL du thumbnail :'); if (v===null) return; state.thumbnail = v;
+        } else if (choice === 'timestamp') {
+            const v = await ask('Activer le timestamp ? (oui/non)'); if (v===null) return; state.timestamp = /^oui$/i.test(v);
+        } else if (choice === 'image') {
+            const v = await ask('URL de l\'image :'); if (v===null) return; state.image = v;
+        } else if (choice === 'url') {
+            const v = await ask('URL à associer au titre :'); if (v===null) return; state.url = v;
+        } else if (choice === 'color') {
+            const v = await ask('Couleur hex (ex: #FF0000) :'); if (v===null) return; if (/^#[0-9a-fA-F]{6}$/.test(v)) state.color = parseInt(v.slice(1),16);
+        }
+        try { await sent.edit({ embeds: [buildPreview()] }); } catch {}
+    });
 });
 
 // Bot control basics
