@@ -987,13 +987,13 @@ defineCommand('choose', async (msg) => {
 defineCommand('embed', async (msg) => {
     if (!requireOwner(msg)) return;
     let state = {
-        title: '', description: '', author: '', footer: '', thumbnail: '', timestamp: false, image: '', url: '', color: getThemeColorForGuild(msg.guild.id)
+        title: '', description: 'Configurer l\'embed via le menu ci-dessous.', author: '', footer: '', thumbnail: '', timestamp: false, image: '', url: '', color: getThemeColorForGuild(msg.guild.id)
     };
 
     function buildPreview() {
         const e = new EmbedBuilder().setColor(state.color || 0xFF0000);
         if (state.title) e.setTitle(state.title);
-        if (state.description) e.setDescription(state.description);
+        e.setDescription(state.description && state.description.length ? state.description : '\u200B');
         if (state.author) e.setAuthor({ name: state.author });
         if (state.footer) e.setFooter({ text: state.footer });
         if (state.thumbnail) e.setThumbnail(state.thumbnail);
