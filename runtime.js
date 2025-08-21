@@ -504,7 +504,7 @@ defineCommand('help all', async (msg) => {
 
     let page = 0;
     const sent = await msg.channel.send({ embeds: [buildPageEmbed(page)], components: [new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('helpall_prev').setLabel('➤').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('helpall_prev').setLabel('◄').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId('helpall_next').setLabel('➤').setStyle(ButtonStyle.Secondary)
     )] });
     const collector = sent.createMessageComponentCollector({ time: 10 * 60 * 1000 });
