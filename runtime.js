@@ -1635,6 +1635,20 @@ client.on('messageCreate', async (message) => {
     }
 });
 
+// Reply with prefix when the bot is pinged with a bare mention
+client.on('messageCreate', async (message) => {
+    try {
+        if (message.author.bot || !message.guild) return;
+        const content = message.content.trim();
+        const match = content.match(/^<@!?([0-9]+)>$/);
+        if (!match) return;
+        if (!client.user || match[1] !== client.user.id) return;
+        const cfg = getGuildConfig(message.guild.id);
+        const currentPrefix = process.env.CHILD_PREFIX || cfg.prefix || PREFIX;
+        await message.channel.send(`Mon prefix est \`${currentPrefix}\``);
+    } catch {}
+});
+
 client.login(TOKEN);
 
 
