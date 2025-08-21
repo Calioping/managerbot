@@ -1312,7 +1312,25 @@ defineCommand('update', async (msg) => { const fn = commands.get('updatebot'); i
 defineCommand('reset server', async (msg) => { if (!requireOwner(msg)) return; await msg.channel.send('La base de donnée du serveur a été supprimée'); removeGuildConfig(msg.guild.id); });
 defineCommand('resetall', async (msg) => { if (!requireOwner(msg)) return; await msg.channel.send('La base de donnée du bot a été supprimée.'); writeStore({ guilds: {} }); });
 
-defineCommand('raidlog', async (msg) => { if (!requireOwner(msg)) return; const parts = msg.content.split(/\s+/); const onoff = (parts[1] || '').toLowerCase(); const cfg = getGuildConfig(msg.guild.id); if (onoff === 'on') cfg.settings.antiraid.raidlogChannelId = (msg.mentions.channels.first()?.id) || msg.channel.id; else if (onoff === 'off') cfg.settings.antiraid.raidlogChannelId = null; saveGuildConfig(msg.guild.id, cfg); await msg.channel.send('Raidlog mis à jour.'); });
+defineCommand('raidlog', async (msg) => {
+    if (!requireOwner(msg)) return;
+    const parts = msg.content.split(/\s+/);
+    const onoff = (parts[1] || '').toLowerCase();
+    const cfg = getGuildConfig(msg.guild.id);
+    if (onoff === 'on') {
+        const ch = msg.mentions.channels.first() || msg.channel;
+        cfg.settings.antiraid.raidlogChannelId = ch.id;
+        saveGuildConfig(msg.guild.id, cfg);
+        return void msg.channel.send("Les logs d'antiraid ont été activés");
+    }
+    if (onoff === 'off') {
+        cfg.settings.antiraid.raidlogChannelId = null;
+        saveGuildConfig(msg.guild.id, cfg);
+        return void msg.channel.send("Les logs d'antiraid ont été désactivés");
+    }
+    return void msg.channel.send('Usage: +raidlog <on/off> [#salon]');
+});
+defineCommand('raid log', async (msg) => { const fn = commands.get('raidlog'); if (fn) return fn(msg); });
 defineCommand('raidping', async (msg) => { if (!requireOwner(msg)) return; const r = msg.mentions.roles.first(); const cfg = getGuildConfig(msg.guild.id); cfg.settings.antiraid.raidpingRoleId = r?.id || null; saveGuildConfig(msg.guild.id, cfg); await msg.channel.send('Raid ping mis à jour.'); });
 defineCommand('antitoken', async (msg) => { if (!requireOwner(msg)) return; await msg.channel.send('Paramètre antitoken enregistré.'); });
 defineCommand('antiupdate', async (msg) => { if (!requireOwner(msg)) return; const cfg = getGuildConfig(msg.guild.id); cfg.settings.antiraid.antiupdate = true; saveGuildConfig(msg.guild.id, cfg); await msg.channel.send('Antiupdate activé.'); });
