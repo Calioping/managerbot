@@ -1,6 +1,7 @@
 const { Client, GatewayIntentBits, Partials, ActivityType, PermissionsBitField, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
+require('dotenv').config();
 
 const TOKEN = process.env.CHILD_TOKEN;
 const PREFIX = process.env.CHILD_PREFIX || '+';
