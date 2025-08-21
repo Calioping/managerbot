@@ -1373,10 +1373,45 @@ defineCommand('wl', async (msg) => {
         if (!cfg.settings.antiraid.whitelist.users.includes(id)) cfg.settings.antiraid.whitelist.users.push(id);
     }
     saveGuildConfig(msg.guild.id, cfg);
-    await msg.channel.send('Ajouté à la whitelist.');
+
+    // Libellé: username pour user, nom pour rôle, sinon tentative fetch par ID
+    const userMention = msg.mentions.users.first();
+    const roleMention = msg.mentions.roles.first();
+    let label = '';
+    if (userMention) label = userMention.username;
+    else if (roleMention) label = roleMention.name;
+    else {
+        const fetchedUser = await client.users.fetch(id).catch(() => null);
+        if (fetchedUser) label = fetchedUser.username; else {
+            const roleById = msg.guild.roles.cache.get(id);
+            label = roleById ? roleById.name : id;
+        }
+    }
+    await msg.channel.send(`${label} est maintenant wl`);
 });
-defineCommand('unwl', async (msg) => { if (!requireOwner(msg)) return; const id = (msg.mentions.users.first()?.id) || (msg.mentions.roles.first()?.id) || msg.content.split(/\s+/)[1]; const cfg = getGuildConfig(msg.guild.id); cfg.settings.antiraid.whitelist.users = cfg.settings.antiraid.whitelist.users.filter(x=>x!==id); cfg.settings.antiraid.whitelist.roles = cfg.settings.antiraid.whitelist.roles.filter(x=>x!==id); saveGuildConfig(msg.guild.id, cfg); await msg.channel.send('Retiré de la whitelist.'); });
-defineCommand('clear wl', async (msg) => { if (!requireOwner(msg)) return; const cfg = getGuildConfig(msg.guild.id); cfg.settings.antiraid.whitelist = { users: [], roles: [] }; saveGuildConfig(msg.guild.id, cfg); await msg.channel.send('Whitelist vidée.'); });
+defineCommand('unwl', async (msg) => {
+    if (!requireOwner(msg)) return;
+    const id = (msg.mentions.users.first()?.id) || (msg.mentions.roles.first()?.id) || msg.content.split(/\s+/)[1];
+    const cfg = getGuildConfig(msg.guild.id);
+    cfg.settings.antiraid.whitelist.users = cfg.settings.antiraid.whitelist.users.filter(x=>x!==id);
+    cfg.settings.antiraid.whitelist.roles = cfg.settings.antiraid.whitelist.roles.filter(x=>x!==id);
+    saveGuildConfig(msg.guild.id, cfg);
+
+    const userMention = msg.mentions.users.first();
+    const roleMention = msg.mentions.roles.first();
+    let label = '';
+    if (userMention) label = userMention.username;
+    else if (roleMention) label = roleMention.name;
+    else {
+        const fetchedUser = await client.users.fetch(id).catch(() => null);
+        if (fetchedUser) label = fetchedUser.username; else {
+            const roleById = msg.guild.roles.cache.get(id);
+            label = roleById ? roleById.name : id;
+        }
+    }
+    await msg.channel.send(`${label} n'est plus wl`);
+});
+defineCommand('clear wl', async (msg) => { if (!requireOwner(msg)) return; const cfg = getGuildConfig(msg.guild.id); cfg.settings.antiraid.whitelist = { users: [], roles: [] }; saveGuildConfig(msg.guild.id, cfg); await msg.channel.send('La whitelist a bien été réinitialisée'); });
 
 // Moderation settings
 defineCommand('timeout', async (msg) => { if (!requireOwner(msg)) return; const onoff = (msg.content.split(/\s+/)[1]||'').toLowerCase(); const cfg = getGuildConfig(msg.guild.id); cfg.settings.moderation.timeout = onoff === 'on'; saveGuildConfig(msg.guild.id, cfg); await msg.channel.send(`Timeout ${cfg.settings.moderation.timeout?'activé':'désactivé'}.`); });
