@@ -1704,22 +1704,21 @@ defineCommand('giveaway', async (msg) => {
     if (!requireOwner(msg)) return;
 
     function buildSettingsEmbed(settings) {
-        const lines = [
-            'Settings Giveaway',
-            `Salon\n${settings.channelId ? `<#${settings.channelId}>` : 'Aucun'}`,
-            `Prix\n${settings.prize || 'Aucun'}`,
-            `Titre du message\n${settings.title}`,
-            `Description du message\n${settings.description}`,
-            `Réaction\n${settings.reaction}`,
-            `Se termine dans\n${settings.durationText}`,
-            `Nombre de gagnants\n${settings.numWinners}`,
-            `Lanceur du giveaway\n${settings.requireLauncher ? 'Oui' : 'Non'}`,
-            `Gagnant imposé\n${settings.forcedWinnerId ? `<@${settings.forcedWinnerId}>` : 'Non'}`
-        ].join('\n');
-        return new EmbedBuilder()
+        const e = new EmbedBuilder()
             .setTitle('Settings Giveaway')
-            .setDescription(lines)
             .setColor(0xFF0000);
+        const fields = [];
+        fields.push({ name: 'Salon', value: settings.channelId ? `<#${settings.channelId}>` : 'Aucun', inline: true });
+        fields.push({ name: 'Prix', value: settings.prize || 'Aucun', inline: true });
+        fields.push({ name: 'Titre du message', value: settings.title || '—', inline: true });
+        fields.push({ name: 'Description du message', value: settings.description || '—', inline: true });
+        fields.push({ name: 'Réaction', value: settings.reaction || '🎉', inline: true });
+        fields.push({ name: 'Se termine dans', value: settings.durationText || '—', inline: true });
+        fields.push({ name: 'Nombre de gagnants', value: String(settings.numWinners || 1), inline: true });
+        fields.push({ name: 'Lanceur du giveaway', value: settings.requireLauncher ? 'Oui' : 'Non', inline: true });
+        fields.push({ name: 'Gagnant imposé', value: settings.forcedWinnerId ? `<@${settings.forcedWinnerId}>` : 'Non', inline: true });
+        e.addFields(fields);
+        return e;
     }
 
     function buildMenu(customId) {
@@ -1754,6 +1753,17 @@ defineCommand('giveaway', async (msg) => {
         return null;
     }
 
+    function humanizeMsFr(ms) {
+        const s = Math.round(ms / 1000);
+        if (s < 60) return `${s} seconde${s>1?'s':''}`;
+        const m = Math.round(s / 60);
+        if (m < 60) return `${m} minute${m>1?'s':''}`;
+        const h = Math.round(m / 60);
+        if (h < 24) return `${h} heure${h>1?'s':''}`;
+        const d = Math.round(h / 24);
+        return `${d} jour${d>1?'s':''}`;
+    }
+
     function extractEmojiIdentifier(input) {
         const trimmed = input.trim();
         const custom = trimmed.match(/^<a?:([A-Za-z0-9_]+):(\d+)>$/);
@@ -1761,17 +1771,21 @@ defineCommand('giveaway', async (msg) => {
         return trimmed; // assume unicode
     }
 
+    // Load previous settings from store if any
+    const db0 = readStore();
+    db0.giveawayDefaults = db0.giveawayDefaults || {};
+    const prev = db0.giveawayDefaults[msg.guild.id] || {};
     const settings = {
-        channelId: null,
-        prize: '',
-        title: '🎉 **GIVEAWAY** 🎉',
-        description: 'Réagis avec 🎉 pour participer au giveaway',
-        reaction: '🎉',
-        durationText: '12h',
-        durationMs: 12 * 60 * 60 * 1000,
-        numWinners: 1,
-        requireLauncher: false,
-        forcedWinnerId: null
+        channelId: prev.channelId ?? null,
+        prize: prev.prize ?? '',
+        title: prev.title ?? '🎉 **GIVEAWAY** 🎉',
+        description: prev.description ?? 'Réagis avec 🎉 pour participer au giveaway',
+        reaction: prev.reaction ?? '🎉',
+        durationText: prev.durationText ?? '12h',
+        durationMs: prev.durationMs ?? (12 * 60 * 60 * 1000),
+        numWinners: prev.numWinners ?? 1,
+        requireLauncher: prev.requireLauncher ?? false,
+        forcedWinnerId: prev.forcedWinnerId ?? null
     };
 
     const embed = buildSettingsEmbed(settings);
@@ -1803,26 +1817,31 @@ defineCommand('giveaway', async (msg) => {
             const ch = msg.guild.channels.cache.get(channelId) || msg.mentions.channels.first();
             if (!ch) return;
             settings.channelId = ch.id;
+            const db = readStore(); db.giveawayDefaults = db.giveawayDefaults||{}; db.giveawayDefaults[msg.guild.id] = { ...db.giveawayDefaults[msg.guild.id], channelId: settings.channelId }; writeStore(db);
         } else if (choice === 'prize') {
             await i.deferUpdate();
             const value = await ask('Quel est le prix du giveaway ?');
             if (!value) return;
             settings.prize = value;
+            const db = readStore(); db.giveawayDefaults = db.giveawayDefaults||{}; db.giveawayDefaults[msg.guild.id] = { ...db.giveawayDefaults[msg.guild.id], prize: settings.prize }; writeStore(db);
         } else if (choice === 'title') {
             await i.deferUpdate();
             const value = await ask('Quel est le titre du message ?');
             if (!value) return;
             settings.title = value.slice(0, 256);
+            const db = readStore(); db.giveawayDefaults = db.giveawayDefaults||{}; db.giveawayDefaults[msg.guild.id] = { ...db.giveawayDefaults[msg.guild.id], title: settings.title }; writeStore(db);
         } else if (choice === 'description') {
             await i.deferUpdate();
             const value = await ask('Quelle est la description du message ?');
             if (!value) return;
             settings.description = value.slice(0, 1900);
+            const db = readStore(); db.giveawayDefaults = db.giveawayDefaults||{}; db.giveawayDefaults[msg.guild.id] = { ...db.giveawayDefaults[msg.guild.id], description: settings.description }; writeStore(db);
         } else if (choice === 'reaction') {
             await i.deferUpdate();
             const value = await ask('Quelle réaction utiliser ? (emoji unique)');
             if (!value) return;
             settings.reaction = value.trim();
+            const db = readStore(); db.giveawayDefaults = db.giveawayDefaults||{}; db.giveawayDefaults[msg.guild.id] = { ...db.giveawayDefaults[msg.guild.id], reaction: settings.reaction }; writeStore(db);
         } else if (choice === 'duration') {
             await i.deferUpdate();
             const value = await ask('Combien va durer le giveaway ? (ex: 12h, 30m, 2d)');
@@ -1831,6 +1850,7 @@ defineCommand('giveaway', async (msg) => {
             if (!ms) return;
             settings.durationText = value;
             settings.durationMs = ms;
+            const db = readStore(); db.ggiveawayDefaults = db.giveawayDefaults||{}; db.giveawayDefaults[msg.guild.id] = { ...db.giveawayDefaults[msg.guild.id], durationText: settings.durationText, durationMs: settings.durationMs }; writeStore(db);
         } else if (choice === 'winners') {
             await i.deferUpdate();
             const value = await ask('Combien de gagnants ? (nombre entier)');
@@ -1838,11 +1858,13 @@ defineCommand('giveaway', async (msg) => {
             const n = parseInt(value, 10);
             if (!Number.isFinite(n) || n < 1 || n > 50) return;
             settings.numWinners = n;
+            const db = readStore(); db.giveawayDefaults = db.giveawayDefaults||{}; db.giveawayDefaults[msg.guild.id] = { ...db.giveawayDefaults[msg.guild.id], numWinners: settings.numWinners }; writeStore(db);
         } else if (choice === 'launcher') {
             await i.deferUpdate();
             const value = await ask('Activer le lanceur du giveaway ? (oui/non)');
             if (!value) return;
             settings.requireLauncher = /^oui$/i.test(value);
+            const db = readStore(); db.giveawayDefaults = db.giveawayDefaults||{}; db.giveawayDefaults[msg.guild.id] = { ...db.giveawayDefaults[msg.guild.id], requireLauncher: settings.requireLauncher }; writeStore(db);
         } else if (choice === 'forced') {
             await i.deferUpdate();
             const value = await ask('Gagnant imposé ? (mention/ID ou "non")');
@@ -1852,20 +1874,64 @@ defineCommand('giveaway', async (msg) => {
                 const id = value.replace(/[^0-9]/g, '');
                 settings.forcedWinnerId = id || null;
             }
+            const db = readStore(); db.giveawayDefaults = db.giveawayDefaults||{}; db.giveawayDefaults[msg.guild.id] = { ...db.giveawayDefaults[msg.guild.id], forcedWinnerId: settings.forcedWinnerId }; writeStore(db);
         } else if (choice === 'start') {
             await i.deferUpdate();
             const channel = (settings.channelId && msg.guild.channels.cache.get(settings.channelId)) || msg.channel;
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
             const gwEmbed = new EmbedBuilder()
-                .setTitle(settings.title)
-                .setDescription(settings.description)
+                .setTitle('🎉 GIVEAWAY 🎉')
+                .setDescription([
+                    settings.prize || 'Aucun',
+                    `Réagis avec ${settings.reaction} pour participer au giveaway!`,
+                    `Se termine: dans ${humanizeMsFr(settings.durationMs)}`
+                ].join('\n'))
                 .setColor(0xFF0000)
-                .addFields(
-                    settings.prize ? [{ name: 'Prix', value: settings.prize, inline: true }] : [],
-                    [{ name: 'Durée', value: settings.durationText, inline: true }, { name: 'Gagnants', value: String(settings.numWinners), inline: true }]
-                );
+                .setFooter({ text: `${msg.guild.name}•Aujourd’hui à ${timeStr}` });
             const gwMsg = await channel.send({ embeds: [gwEmbed] });
             const emojiIdent = extractEmojiIdentifier(settings.reaction);
             try { await gwMsg.react(emojiIdent); } catch {}
+
+            // Persist current settings as defaults for next time
+            const db = readStore(); db.giveawayDefaults = db.giveawayDefaults||{}; db.giveawayDefaults[msg.guild.id] = { ...settings }; writeStore(db);
+
+            // Schedule finish
+            setTimeout(async () => {
+                try {
+                    const refreshed = await gwMsg.fetch();
+                    const reactions = refreshed.reactions.cache;
+                    // Collect participants
+                    let users = [];
+                    for (const r of reactions.values()) {
+                        try {
+                            const reactedUsers = await r.users.fetch();
+                            for (const u of reactedUsers.values()) { if (!u.bot) users.push(u); }
+                        } catch {}
+                    }
+                    // Deduplicate
+                    const seen = new Set(); users = users.filter(u => (seen.has(u.id) ? false : (seen.add(u.id), true)));
+                    if (settings.forcedWinnerId && !users.find(u => u.id === settings.forcedWinnerId)) {
+                        const forcedUser = await gwMsg.client.users.fetch(settings.forcedWinnerId).catch(()=>null);
+                        if (forcedUser) users.push(forcedUser);
+                    }
+                    const winners = [];
+                    while (winners.length < settings.numWinners && users.length) {
+                        const idx = Math.floor(Math.random()*users.length);
+                        const pick = users.splice(idx,1)[0];
+                        if (!winners.find(w=>w.id===pick.id)) winners.push(pick);
+                    }
+                    const winnerText = winners.length ? winners.map(w=>`<@${w.id}>`).join(', ') : 'Aucun participant';
+                    const endedEmbed = EmbedBuilder.from(refreshed.embeds[0])
+                        .setDescription([
+                            settings.prize || 'Aucun',
+                            `Réagis avec ${settings.reaction} pour participer au giveaway!`,
+                            `Se termine: terminé`,
+                            `Gagnant${winners.length>1?'s':''}: ${winnerText}`
+                        ].join('\n'));
+                    await refreshed.edit({ embeds: [endedEmbed] });
+                } catch {}
+            }, Math.max(1000, settings.durationMs));
             return;
         }
 
