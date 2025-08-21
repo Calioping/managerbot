@@ -1708,7 +1708,7 @@ defineCommand('unbanall', async (msg) => { const bans = await msg.guild.bans.fet
 
 // Server management utilities
 defineCommand('choose', async (msg) => { const items = msg.content.split(/\s+/).slice(1); if (!items.length) return void msg.channel.send('Fournis des options.'); const pick = items[Math.floor(Math.random()*items.length)]; await msg.channel.send('Choix: ' + pick); });
-defineCommand('embed', async (msg) => { const text = msg.content.slice((process.env.CHILD_PREFIX||PREFIX).length + 'embed'.length).trim(); if (!text) return void msg.channel.send('Fournis un texte.'); const color = getGuildConfig(msg.guild.id).settings.themeColor; await msg.channel.send({ embeds: [new EmbedBuilder().setDescription(text).setColor(color)] }); });
+// (Remplacé par le générateur interactif ci-dessus)
 defineCommand('cleanup', async (msg) => { const n = parseInt(msg.content.split(/\s+/)[1]||'50',10); const lim = getGuildConfig(msg.guild.id).settings.moderation.clearLimit; const count = Math.min(n, lim); await msg.channel.bulkDelete(count, true).catch(()=>{}); });
 defineCommand('voicemove', async (msg) => { const [_, fromId, toId] = msg.content.split(/\s+/); const from = msg.guild.channels.cache.get(fromId); const to = msg.guild.channels.cache.get(toId); if (!from||!to) return void msg.channel.send('Usage: +voicemove <fromId> <toId>'); const members = from.members; for (const m of members.values()) { try { await m.voice.setChannel(to); } catch {} } await msg.react('✅'); });
 defineCommand('voicekick', async (msg) => { const m = msg.mentions.members.first(); if (!m||!m.voice.channelId) return void msg.channel.send('Mentionne un membre en vocal.'); await m.voice.disconnect().catch(()=>{}); await msg.react('✅'); });
