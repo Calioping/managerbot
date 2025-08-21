@@ -1250,8 +1250,8 @@ defineCommand('owners', async (msg) => {
     }
 
     const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('owners_prev').setStyle(ButtonStyle.Secondary).setLabel('➤'),
-        new ButtonBuilder().setCustomId('owners_next').setStyle(ButtonStyle.Secondary).setLabel('➤')
+        new ButtonBuilder().setCustomId('owners_prev').setStyle(ButtonStyle.Secondary).setLabel('<'),
+        new ButtonBuilder().setCustomId('owners_next').setStyle(ButtonStyle.Secondary).setLabel('>')
     );
 
     const firstEmbed = await buildPageEmbedAsync(page);
@@ -1265,8 +1265,8 @@ defineCommand('owners', async (msg) => {
         const disabledPrev = page === 0;
         const disabledNext = page === maxPage;
         const newRow = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('owners_prev').setStyle(ButtonStyle.Secondary).setLabel('➤').setDisabled(disabledPrev),
-            new ButtonBuilder().setCustomId('owners_next').setStyle(ButtonStyle.Secondary).setLabel('➤').setDisabled(disabledNext)
+            new ButtonBuilder().setCustomId('owners_prev').setStyle(ButtonStyle.Secondary).setLabel('<').setDisabled(disabledPrev),
+            new ButtonBuilder().setCustomId('owners_next').setStyle(ButtonStyle.Secondary).setLabel('>').setDisabled(disabledNext)
         );
         const embed = await buildPageEmbedAsync(page);
         await i.update({ embeds: [embed], components: [newRow] });
