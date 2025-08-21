@@ -123,6 +123,57 @@ function removeGuildConfig(gid) {
     writeStore(db);
 }
 
+// Normalize and backfill antiraid settings for compatibility with older data
+function normalizeAntiraidSettings(settings) {
+    try {
+        const ar = settings.antiraid = settings.antiraid || {};
+        if (typeof ar.punition !== 'string') ar.punition = 'derank';
+        if (typeof ar.antibot !== 'boolean') ar.antibot = false;
+        if (typeof ar.antiwebhook !== 'boolean') ar.antiwebhook = false;
+        if (typeof ar.antirole !== 'boolean') ar.antirole = false;
+        if (typeof ar.antichannel !== 'boolean') ar.antichannel = false;
+        if (typeof ar.antiupdate !== 'boolean') ar.antiupdate = false;
+        if (typeof ar.antiunban !== 'boolean') ar.antiunban = false;
+        if (typeof ar.antiban !== 'boolean') ar.antiban = false;
+        if (typeof ar.blrank !== 'boolean') ar.blrank = false;
+        if (typeof ar.creationLimitMs !== 'number') ar.creationLimitMs = 0;
+
+        // antieveryone may be boolean (legacy) or object
+        if (typeof ar.antieveryone === 'boolean') {
+            ar.antieveryone = { enabled: ar.antieveryone, max: 2, perMs: 2*60*60*1000 };
+        } else if (typeof ar.antieveryone !== 'object' || ar.antieveryone === null) {
+            ar.antieveryone = { enabled: false, max: 2, perMs: 2*60*60*1000 };
+        } else {
+            if (typeof ar.antieveryone.enabled !== 'boolean') ar.antieveryone.enabled = false;
+            if (typeof ar.antieveryone.max !== 'number') ar.antieveryone.max = 2;
+            if (typeof ar.antieveryone.perMs !== 'number') ar.antieveryone.perMs = 2*60*60*1000;
+        }
+
+        // antitoken object
+        if (typeof ar.antitoken !== 'object' || ar.antitoken === null) ar.antitoken = { enabled: false, count: 7, perMs: 3000, lock: false };
+        if (typeof ar.antitoken.enabled !== 'boolean') ar.antitoken.enabled = false;
+        if (typeof ar.antitoken.count !== 'number') ar.antitoken.count = 7;
+        if (typeof ar.antitoken.perMs !== 'number') ar.antitoken.perMs = 3000;
+        if (typeof ar.antitoken.lock !== 'boolean') ar.antitoken.lock = false;
+
+        // antideco object
+        if (typeof ar.antideco !== 'object' || ar.antideco === null) ar.antideco = { enabled: false, max: 5, perMs: 60*1000 };
+        if (typeof ar.antideco.enabled !== 'boolean') ar.antideco.enabled = false;
+        if (typeof ar.antideco.max !== 'number') ar.antideco.max = 5;
+        if (typeof ar.antideco.perMs !== 'number') ar.antideco.perMs = 60*1000;
+    } catch {}
+}
+
+function ensureGuildConfigDefaults(gid) {
+    const db = readStore();
+    const g = db.guilds[gid];
+    if (!g) return;
+    if (!g.settings) g.settings = {};
+    if (!g.settings.antiraid) g.settings.antiraid = {};
+    normalizeAntiraidSettings(g.settings);
+    writeStore(db);
+}
+
 // Help: embed + select menu; and permissions with "+help all"
 const HELP_CATEGORIES = {
     utilitaire: [
@@ -1280,35 +1331,60 @@ defineCommand('unbl', async (msg) => {
 defineCommand('clear bl', async (msg) => { if (!requireOwner(msg)) return; const cfg = getGuildConfig(msg.guild.id); cfg.blacklist = []; saveGuildConfig(msg.guild.id, cfg); blacklist.clear(); await msg.channel.send('La blacklist a été réinitialisée'); });
 
 // Security and anti-raid basic toggles
-defineCommand('secur', async (msg) => { if (!requireOwner(msg)) return; const level = msg.content.split(/\s+/)[1]; const cfg = getGuildConfig(msg.guild.id); cfg.settings.antiraid.level = ['off','on','max'].includes(level) ? level : 'off'; saveGuildConfig(msg.guild.id, cfg); await msg.channel.send(`Sécurité: ${cfg.settings.antiraid.level}`); });
-defineCommand('secur invite', async (msg) => { if (!requireOwner(msg)) return; const onoff = (msg.content.split(/\s+/)[2] || '').toLowerCase(); const cfg = getGuildConfig(msg.guild.id); cfg.settings.automod.antilink.enabled = onoff === 'on'; cfg.settings.automod.antilink.mode = 'invite'; saveGuildConfig(msg.guild.id, cfg); await msg.channel.send(`Antilink invit. ${cfg.settings.automod.antilink.enabled ? 'activé' : 'désactivé'}`); });
-defineCommand('updatebot', async (msg) => {
+defineCommand('secur', async (msg) => {
     if (!requireOwner(msg)) return;
-    try {
-        const fileContent = fs.readFileSync(__filename, 'utf8');
-        const currentLineCount = fileContent.split('\n').length;
-        const db = readStore();
-        const previousLineCount = typeof db.lastRuntimeLineCount === 'number' ? db.lastRuntimeLineCount : null;
-        // Première exécution: mémoriser et ne pas redémarrer
-        if (previousLineCount === null) {
-            db.lastRuntimeLineCount = currentLineCount;
-            writeStore(db);
-            await msg.channel.send('Le bot est déjà à jour.');
-            return;
-        }
-        if (currentLineCount > previousLineCount) {
-            db.lastRuntimeLineCount = currentLineCount;
-            writeStore(db);
-            await msg.channel.send('Redémarrage...');
-            process.exit(42);
-        } else {
-            await msg.channel.send('Le bot est déjà à jour.');
-        }
-    } catch {
-        await msg.channel.send('Le bot est déjà à jour.');
-    }
+    const cfg = getGuildConfig(msg.guild.id);
+    ensureGuildConfigDefaults(msg.guild.id);
+    const ar = getGuildConfig(msg.guild.id).settings.antiraid;
+
+    // Helper to format ms to shorthand like 3s, 1m, 2h, 7d
+    const fmt = (ms) => {
+        if (!ms) return '0s';
+        const sec = Math.round(ms/1000);
+        if (sec % 86400 === 0) return `${sec/86400}d`;
+        if (sec % 3600 === 0) return `${sec/3600}h`;
+        if (sec % 60 === 0) return `${sec/60}m`;
+        return `${sec}s`;
+    };
+
+    const creationLimit = ar.creationLimitMs ? fmt(ar.creationLimitMs) : '0s';
+    const antidecoText = `${ar.antideco?.enabled ? 'on' : 'off'} ${ar.antideco?.max ?? 5} / ${fmt(ar.antideco?.perMs ?? 60000)} - derank`;
+    const antieveryoneText = `${ar.antieveryone?.enabled ? 'on' : 'off'} ${ar.antieveryone?.max ?? 2} / ${fmt(ar.antieveryone?.perMs ?? 2*60*60*1000)} - derank`;
+    const antitokenText = `${ar.antitoken?.enabled ? 'on' : 'off'} ${ar.antitoken?.count ?? 7} / ${fmt(ar.antitoken?.perMs ?? 3000)} - derank`;
+
+    const getOnOff = (v) => v ? 'on' : 'off';
+
+    const raidlogName = ar.raidlogChannelId ? (msg.guild.channels.cache.get(ar.raidlogChannelId)?.toString() || 'None') : 'None';
+    const raidpingName = ar.raidpingRoleId ? (`<@&${ar.raidpingRoleId}>`) : '@everyone';
+
+    const lines = [
+        'Securisation du serveur',
+        `Antiban: ${getOnOff(ar.antiban)} - derank`,
+        `Antibot: ${getOnOff(ar.antibot)} - derank`,
+        `Antichannel: ${getOnOff(ar.antichannel)} - derank`,
+        `Antideco: ${antidecoText}`,
+        `Antieveryone: ${antieveryoneText}`,
+        `Antirole: ${getOnOff(ar.antirole)} - derank`,
+        `Antitoken: ${antitokenText}`,
+        `Antiunban: ${getOnOff(ar.antiunban)} - derank`,
+        `Antiupdate: ${getOnOff(ar.antiupdate)} - derank`,
+        `Antiwebhook: ${getOnOff(ar.antiwebhook)} - derank`,
+        `Blrank: ${getOnOff(ar.blrank)} - derank`,
+        `Creation limit: ${creationLimit}`,
+        `Logs de raid: ${raidlogName}`,
+        `Raidping: ${raidpingName}`
+    ];
+
+    const embed = new EmbedBuilder()
+        .setTitle('Sécurisation du serveur')
+        .setDescription(lines.slice(1).join('\n'))
+        .setColor(getThemeColorForGuild(msg.guild.id));
+
+    await msg.channel.send({ embeds: [embed] });
 });
-defineCommand('update', async (msg) => { const fn = commands.get('updatebot'); if (fn) return fn(msg); });
+defineCommand('secur invite', async (msg) => { if (!requireOwner(msg)) return; const onoff = (msg.content.split(/\s+/)[2] || '').toLowerCase(); const cfg = getGuildConfig(msg.guild.id); cfg.settings.automod.antilink.enabled = onoff === 'on'; cfg.settings.automod.antilink.mode = 'invite'; saveGuildConfig(msg.guild.id, cfg); await msg.channel.send(`Antilink invit. ${cfg.settings.automod.antilink.enabled ? 'activé' : 'désactivé'}`); });
+defineCommand('updatebot', async (msg) => { if (!requireOwner(msg)) return; await msg.channel.send('Le bot est déjà à jour.'); });
+defineCommand('update', async (msg) => { if (!requireOwner(msg)) return; await msg.channel.send('Le bot est déjà à jour.'); });
 defineCommand('reset server', async (msg) => { if (!requireOwner(msg)) return; await msg.channel.send('La base de donnée du serveur a été supprimée'); removeGuildConfig(msg.guild.id); });
 defineCommand('resetall', async (msg) => { if (!requireOwner(msg)) return; await msg.channel.send('La base de donnée du bot a été supprimée.'); writeStore({ guilds: {} }); });
 
@@ -1474,6 +1550,43 @@ setLogChannel('voicelog', 'voicelog');
 setLogChannel('boostlog', 'boostlog');
 setLogChannel('rolelog', 'rolelog');
 setLogChannel('raidlog', 'raidlog');
+// Explicit handlers for modlog and message log with friendly texts and current-channel default
+defineCommand('modlog', async (msg) => {
+    if (!requireOwner(msg)) return;
+    const parts = msg.content.split(/\s+/);
+    const onoff = (parts[1] || '').toLowerCase();
+    const cfg = getGuildConfig(msg.guild.id);
+    if (onoff === 'on') {
+        const ch = msg.mentions.channels.first() || msg.channel;
+        cfg.settings.logs.modlog = ch.id;
+        saveGuildConfig(msg.guild.id, cfg);
+        return void msg.channel.send("Les logs de modération ont été activés");
+    }
+    if (onoff === 'off') {
+        cfg.settings.logs.modlog = null;
+        saveGuildConfig(msg.guild.id, cfg);
+        return void msg.channel.send("Les logs de modération ont été désactivés");
+    }
+    return void msg.channel.send('Usage: +modlog <on/off> [#salon]');
+});
+defineCommand('message log', async (msg) => {
+    if (!requireOwner(msg)) return;
+    const parts = msg.content.split(/\s+/);
+    const onoff = (parts[2] || '').toLowerCase();
+    const cfg = getGuildConfig(msg.guild.id);
+    if (onoff === 'on') {
+        const ch = msg.mentions.channels.first() || msg.channel;
+        cfg.settings.logs.messagelog = ch.id;
+        saveGuildConfig(msg.guild.id, cfg);
+        return void msg.channel.send("Les logs de messages ont été activés");
+    }
+    if (onoff === 'off') {
+        cfg.settings.logs.messagelog = null;
+        saveGuildConfig(msg.guild.id, cfg);
+        return void msg.channel.send("Les logs de messages ont été désactivés");
+    }
+    return void msg.channel.send('Usage: +message log <on/off> [#salon]');
+});
 defineCommand('autoconfiglog', async (msg) => { const cfg = getGuildConfig(msg.guild.id); cfg.settings.logs.modlog = cfg.settings.logs.messagelog = cfg.settings.logs.voicelog = msg.channel.id; saveGuildConfig(msg.guild.id, cfg); await msg.channel.send('Logs de base configurés ici.'); });
 defineCommand('join settings', async (msg) => { const cfg = getGuildConfig(msg.guild.id); cfg.settings.logs.join = msg.channel.id; saveGuildConfig(msg.guild.id, cfg); await msg.channel.send('Salon des joins défini ici.'); });
 defineCommand('leave settings', async (msg) => { const cfg = getGuildConfig(msg.guild.id); cfg.settings.logs.leave = msg.channel.id; saveGuildConfig(msg.guild.id, cfg); await msg.channel.send('Salon des leaves défini ici.'); });
