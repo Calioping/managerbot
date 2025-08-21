@@ -1337,6 +1337,36 @@ defineCommand('secur', async (msg) => {
     ensureGuildConfigDefaults(msg.guild.id);
     const ar = getGuildConfig(msg.guild.id).settings.antiraid;
 
+    const arg = (msg.content.split(/\s+/)[1] || '').toLowerCase();
+
+    // Apply presets when specified
+    if (['off','on','max'].includes(arg)) {
+        if (arg === 'off') {
+            ar.antiban = false; ar.antibot = false; ar.antichannel = false; ar.antirole = false; ar.antiupdate = false; ar.antiwebhook = false; ar.antiunban = false; ar.blrank = false;
+            ar.antieveryone = { enabled: false, max: 2, perMs: 2*60*60*1000 };
+            ar.antitoken = { enabled: false, count: 7, perMs: 3000, lock: false };
+            ar.antideco = { enabled: false, max: 5, perMs: 60*1000 };
+            ar.creationLimitMs = 0;
+            ar.punition = 'derank';
+        } else if (arg === 'on') {
+            ar.antiban = true; ar.antibot = true; ar.antichannel = true; ar.antirole = true; ar.antiupdate = true; ar.antiwebhook = true; ar.antiunban = true; ar.blrank = true;
+            ar.antieveryone = { enabled: true, max: 2, perMs: 2*60*60*1000 };
+            ar.antitoken = { enabled: true, count: 7, perMs: 3000, lock: false };
+            ar.antideco = { enabled: false, max: 5, perMs: 60*1000 };
+            ar.creationLimitMs = 7*24*60*60*1000; // 7d
+            ar.punition = 'derank';
+        } else if (arg === 'max') {
+            ar.antiban = true; ar.antibot = true; ar.antichannel = true; ar.antirole = true; ar.antiupdate = true; ar.antiwebhook = true; ar.antiunban = true; ar.blrank = true;
+            ar.antieveryone = { enabled: true, max: 1, perMs: 2*60*60*1000 };
+            ar.antitoken = { enabled: true, count: 4, perMs: 3000, lock: true };
+            ar.antideco = { enabled: true, max: 5, perMs: 60*1000 };
+            ar.creationLimitMs = 30*24*60*60*1000; // 30d
+            ar.punition = 'derank';
+        }
+        cfg.settings.antiraid = ar;
+        saveGuildConfig(msg.guild.id, cfg);
+    }
+
     // Helper to format ms to shorthand like 3s, 1m, 2h, 7d
     const fmt = (ms) => {
         if (!ms) return '0s';
