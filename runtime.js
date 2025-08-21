@@ -1946,7 +1946,63 @@ defineCommand('giveaway', async (msg) => {
         } catch {}
     });
 });
-defineCommand('end giveaway', async (msg) => { await msg.channel.send('Fin de giveaway en cours d\'implémentation.'); });
+defineCommand('end giveaway', async (msg) => {
+    if (!requireOwner(msg)) return;
+    const id = (msg.content.split(/\s+/).slice(2)[0] || '').trim();
+    if (!id) return void msg.channel.send('Usage: +end giveaway <ID_message>');
+
+    async function findMessageInGuild(guild, messageId) {
+        for (const ch of guild.channels.cache.values()) {
+            if (!ch || typeof ch.messages?.fetch !== 'function') continue;
+            try {
+                const m = await ch.messages.fetch(messageId);
+                if (m) return m;
+            } catch {}
+        }
+        return null;
+    }
+
+    try {
+        const targetMsg = await findMessageInGuild(msg.guild, id);
+        if (!targetMsg) return void msg.channel.send('Message introuvable.');
+
+        // Determine prize from embed (first line of description)
+        const original = targetMsg.embeds && targetMsg.embeds[0] ? targetMsg.embeds[0] : null;
+        const lines = (original?.description || '').split('\n');
+        const prize = (lines[0] || '').trim() || 'le giveaway';
+
+        // Choose reaction with highest count
+        let topReaction = null;
+        for (const r of targetMsg.reactions.cache.values()) {
+            if (!topReaction || (r.count || 0) > (topReaction.count || 0)) topReaction = r;
+        }
+        if (!topReaction) return void msg.channel.send('Aucune réaction trouvée sur ce message.');
+
+        const reactedUsers = await topReaction.users.fetch();
+        const pool = reactedUsers.filter(u => !u.bot);
+        if (!pool.size) return void msg.channel.send('Aucun participant.');
+
+        const arr = Array.from(pool.values());
+        const winner = arr[Math.floor(Math.random() * arr.length)];
+        const winnerText = `<@${winner.id}>`;
+
+        // Update embed: mark finished and add winner line
+        if (original) {
+            const newLines = lines.slice();
+            const endIdx = newLines.findIndex(l => /^Se termine:/i.test(l));
+            if (endIdx >= 0) newLines[endIdx] = 'Se termine: terminé';
+            const winIdx = newLines.findIndex(l => /^Gagnant/i.test(l));
+            const newWinLine = `Gagnant: ${winnerText}`;
+            if (winIdx >= 0) newLines[winIdx] = newWinLine; else newLines.push(newWinLine);
+            const updated = EmbedBuilder.from(original).setDescription(newLines.join('\n'));
+            await targetMsg.edit({ embeds: [updated] });
+        }
+
+        await msg.channel.send(`Félicitations à ${winnerText} qui gagne ${prize}`);
+    } catch {
+        await msg.channel.send('Impossible de terminer ce giveaway.');
+    }
+});
 defineCommand('reroll', async (msg) => {
     if (!requireOwner(msg)) return;
     const id = (msg.content.split(/\s+/)[1] || '').trim();
