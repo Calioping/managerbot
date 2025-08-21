@@ -1930,6 +1930,11 @@ defineCommand('giveaway', async (msg) => {
                             `Gagnant${winners.length>1?'s':''}: ${winnerText}`
                         ].join('\n'));
                     await refreshed.edit({ embeds: [endedEmbed] });
+                    // Congratulate winners
+                    if (winners.length) {
+                        const congratsPrize = settings.prize && settings.prize.trim().length ? settings.prize : 'le giveaway';
+                        await refreshed.channel.send(`Félicitations à ${winnerText} qui ${winners.length>1?'gagnent':'gagne'} ${congratsPrize}`);
+                    }
                 } catch {}
             }, Math.max(1000, settings.durationMs));
             return;
@@ -1942,7 +1947,55 @@ defineCommand('giveaway', async (msg) => {
     });
 });
 defineCommand('end giveaway', async (msg) => { await msg.channel.send('Fin de giveaway en cours d\'implémentation.'); });
-defineCommand('reroll', async (msg) => { await msg.channel.send('Reroll en cours d\'implémentation.'); });
+defineCommand('reroll', async (msg) => {
+    if (!requireOwner(msg)) return;
+    const id = (msg.content.split(/\s+/)[1] || '').trim();
+    if (!id) return void msg.channel.send('Usage: +reroll <ID_message>');
+
+    async function findMessageInGuild(guild, messageId) {
+        for (const ch of guild.channels.cache.values()) {
+            if (!ch || typeof ch.messages?.fetch !== 'function') continue;
+            try {
+                const m = await ch.messages.fetch(messageId);
+                if (m) return m;
+            } catch {}
+        }
+        return null;
+    }
+
+    try {
+        const targetMsg = await findMessageInGuild(msg.guild, id);
+        if (!targetMsg) return void msg.channel.send('Message introuvable.');
+
+        // Choose reaction with highest count
+        let topReaction = null;
+        for (const r of targetMsg.reactions.cache.values()) {
+            if (!topReaction || (r.count || 0) > (topReaction.count || 0)) topReaction = r;
+        }
+        if (!topReaction) return void msg.channel.send('Aucune réaction trouvée sur ce message.');
+
+        const reactedUsers = await topReaction.users.fetch();
+        const pool = reactedUsers.filter(u => !u.bot);
+        if (!pool.size) return void msg.channel.send('Aucun participant.');
+
+        const arr = Array.from(pool.values());
+        const winner = arr[Math.floor(Math.random() * arr.length)];
+
+        // Update embed to show new winner
+        if (targetMsg.embeds && targetMsg.embeds[0]) {
+            const original = targetMsg.embeds[0];
+            const lines = (original.description || '').split('\n');
+            const winIdx = lines.findIndex(l => /^Gagnant/i.test(l));
+            const newLine = `Gagnant: <@${winner.id}>`;
+            if (winIdx >= 0) lines[winIdx] = newLine; else lines.push(newLine);
+            const updated = EmbedBuilder.from(original).setDescription(lines.join('\n'));
+            await targetMsg.edit({ embeds: [updated] });
+        }
+        await msg.channel.send(`Nouveau gagnant: <@${winner.id}>`);
+    } catch {
+        await msg.channel.send('Reroll impossible.');
+    }
+});
 
 // Backup (stubs)
 defineCommand('backup', async (msg) => { await msg.channel.send('Backup en cours d\'implémentation.'); });
