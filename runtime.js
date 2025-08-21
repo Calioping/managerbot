@@ -465,7 +465,7 @@ defineCommand('help all', async (msg) => {
 
     const pages = [
         { title: 'Public', cmds: [
-            'help','pic [membre]','banner [membre]','server pic','server banner','emoji <émoji>'
+            'help','pic [membre]','banner [membre]','server pic','server banner','emoji <émoji>','support'
         ]},
         { title: 'Perm 1', cmds: [
             'warn <membre> [raison]','unmute <membre>'
@@ -504,8 +504,8 @@ defineCommand('help all', async (msg) => {
 
     let page = 0;
     const sent = await msg.channel.send({ embeds: [buildPageEmbed(page)], components: [new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('helpall_prev').setEmoji('⬅️').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId('helpall_next').setEmoji('➡️').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId('helpall_prev').setLabel('➤').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('helpall_next').setLabel('➤').setStyle(ButtonStyle.Secondary)
     )] });
     const collector = sent.createMessageComponentCollector({ time: 10 * 60 * 1000 });
     collector.on('collect', async (i) => {
@@ -816,6 +816,9 @@ defineCommand('pic', async (msg) => {
         .setColor(getThemeColorForGuild(msg.guild.id));
     
     await msg.channel.send({ embeds: [embed] });
+});
+defineCommand('support', async (msg) => {
+    await msg.channel.send('Support: https://discord.gg/dN8pU5hXcC');
 });
 defineCommand('role', async (msg) => {
     const role = msg.mentions.roles.first();
