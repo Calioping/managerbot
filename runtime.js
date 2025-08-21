@@ -1610,7 +1610,17 @@ defineCommand('mute', async (msg) => { const m = msg.mentions.members.first(); c
 defineCommand('unmute', async (msg) => { const m = msg.mentions.members.first(); const cfg = getGuildConfig(msg.guild.id); if (!m||!cfg.settings.moderation.muteroleId) return void msg.channel.send('Usage: +unmute @membre'); await m.roles.remove(cfg.settings.moderation.muteroleId).catch(()=>{}); await msg.react('✅'); });
 defineCommand('unmuteall', async (msg) => { const cfg = getGuildConfig(msg.guild.id); if (!cfg.settings.moderation.muteroleId) return; const mems = await msg.guild.members.fetch(); for (const m of mems.values()) { try { await m.roles.remove(cfg.settings.moderation.muteroleId); } catch {} } await msg.react('✅'); });
 defineCommand('mutelist', async (msg) => { const cfg = getGuildConfig(msg.guild.id); if (!cfg.settings.moderation.muteroleId) return void msg.channel.send('Aucun muterole.'); const role = msg.guild.roles.cache.get(cfg.settings.moderation.muteroleId); const list = (await msg.guild.members.fetch()).filter(m => role && m.roles.cache.has(role.id)); await msg.channel.send('Mutés: ' + list.map(m=>m.user.tag).join(', ').slice(0,1900)); });
-defineCommand('warn', async (msg) => { const m = msg.mentions.members.first(); if (!m) return void msg.channel.send('Usage: +warn @membre'); const cfg = getGuildConfig(msg.guild.id); cfg.warns = cfg.warns||{}; cfg.warns[m.id]=(cfg.warns[m.id]||0)+1; saveGuildConfig(msg.guild.id, cfg); await msg.channel.send(`${m.user.tag} avertissements: ${cfg.warns[m.id]}`); });
+defineCommand('warn', async (msg) => {
+    const m = msg.mentions.members.first();
+    if (!m) return void msg.channel.send('Usage: +warn @membre [raison]');
+    const reason = msg.content.split(/\s+/).slice(2).join(' ').trim() || 'Aucune raison';
+    const cfg = getGuildConfig(msg.guild.id);
+    cfg.warns = cfg.warns || {};
+    cfg.warns[m.id] = (cfg.warns[m.id] || 0) + 1;
+    saveGuildConfig(msg.guild.id, cfg);
+    const username = m.user.username || m.user.id;
+    await msg.channel.send(`[${username}] a été averti pour ${reason}`);
+});
 defineCommand('renew', async (msg) => { const ch = msg.channel; const pos = ch.position; const newCh = await ch.clone(); await ch.delete().catch(()=>{}); try { await newCh.setPosition(pos); } catch {} });
 defineCommand('unban', async (msg) => { const id = msg.content.split(/\s+/)[1]; if (!id) return void msg.channel.send('Usage: +unban <ID>'); await msg.guild.bans.remove(id).catch(()=>{}); await msg.react('✅'); });
 defineCommand('unbanall', async (msg) => { const bans = await msg.guild.bans.fetch(); for (const b of bans.values()) { try { await msg.guild.bans.remove(b.user.id); } catch {} } await msg.react('✅'); });
