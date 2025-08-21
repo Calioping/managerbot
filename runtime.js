@@ -1285,23 +1285,14 @@ defineCommand('secur invite', async (msg) => { if (!requireOwner(msg)) return; c
 defineCommand('updatebot', async (msg) => {
     if (!requireOwner(msg)) return;
     try {
-        const cp = require('child_process');
-        try { cp.execSync('git fetch', { cwd: process.cwd(), stdio: 'pipe' }); } catch {}
-        let branch = '';
-        try { branch = cp.execSync('git rev-parse --abbrev-ref HEAD', { cwd: process.cwd(), stdio: 'pipe' }).toString().trim(); } catch {}
-        let diff = '';
-        try { diff = cp.execSync(`git diff --numstat HEAD..origin/${branch}`, { cwd: process.cwd(), stdio: 'pipe' }).toString(); } catch {}
-        let added = 0;
-        if (diff) {
-            for (const line of diff.trim().split('\n')) {
-                const parts = line.trim().split(/\s+/);
-                const a = parseInt(parts[0], 10);
-                if (!isNaN(a)) added += a;
-            }
-        }
-        if (added > 0) {
+        const fileContent = fs.readFileSync(__filename, 'utf8');
+        const currentLineCount = fileContent.split('\n').length;
+        const db = readStore();
+        const previousLineCount = db.lastRuntimeLineCount || 0;
+        if (currentLineCount > previousLineCount) {
+            db.lastRuntimeLineCount = currentLineCount;
+            writeStore(db);
             await msg.channel.send('Redémarrage...');
-            try { cp.execSync('git pull --ff-only', { cwd: process.cwd(), stdio: 'pipe' }); } catch {}
             process.exit(42);
         } else {
             await msg.channel.send('Le bot est déjà à jour.');
