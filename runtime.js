@@ -2144,8 +2144,45 @@ defineCommand('reroll', async (msg) => {
     }
 });
 
-// Backup (stubs)
-defineCommand('backup', async (msg) => { await msg.channel.send('Backup en cours d\'implémentation.'); });
+// Backups
+defineCommand('backup', async (msg) => {
+    if (!requireOwner(msg)) return;
+    const parts = msg.content.split(/\s+/).slice(1);
+    const sub = (parts[0] || '').toLowerCase();
+    const rawId = parts[1] || '';
+    const guildId = rawId.replace(/[^0-9]/g, '');
+    if (!['server','emoji'].includes(sub) || !guildId) {
+        return void msg.channel.send('Usage: +backup <server/emoji> <guildId>');
+    }
+    const guild = client.guilds.cache.get(guildId);
+    if (!guild) return void msg.channel.send('Serveur introuvable (le bot doit y être).');
+
+    try {
+        const dir = path.join(process.cwd(), 'data', 'backups');
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        const ts = new Date();
+        const tsStr = ts.toISOString().replace(/[:.]/g, '-');
+        if (sub === 'emoji') {
+            const emojis = guild.emojis.cache.map(e => ({ id: e.id, name: e.name, animated: e.animated, url: e.url }));
+            const payload = { type: 'emoji', guildId: guild.id, guildName: guild.name, createdAt: ts.toISOString(), emojis };
+            const file = path.join(dir, `emoji_${guild.id}_${tsStr}.json`);
+            fs.writeFileSync(file, JSON.stringify(payload, null, 2));
+            return void msg.channel.send(`Backup emoji créée pour ${guild.name} (${emojis.length} éléments).`);
+        }
+        if (sub === 'server') {
+            const roles = guild.roles.cache
+                .filter(r => r.id !== guild.id)
+                .map(r => ({ id: r.id, name: r.name, color: r.hexColor, hoist: r.hoist, mentionable: r.mentionable, permissions: r.permissions.bitfield.toString() }));
+            const channels = guild.channels.cache.map(ch => ({ id: ch.id, name: ch.name, type: ch.type, parentId: ch.parentId || null, position: ch.position, topic: ch.topic || null, rateLimitPerUser: ch.rateLimitPerUser || 0 }));
+            const payload = { type: 'server', guildId: guild.id, guildName: guild.name, createdAt: ts.toISOString(), iconURL: guild.iconURL(), bannerURL: guild.bannerURL(), roles, channels };
+            const file = path.join(dir, `server_${guild.id}_${tsStr}.json`);
+            fs.writeFileSync(file, JSON.stringify(payload, null, 2));
+            return void msg.channel.send(`Backup serveur créée pour ${guild.name}.`);
+        }
+    } catch (e) {
+        return void msg.channel.send('Erreur lors de la création de la backup.');
+    }
+});
 defineCommand('backup list', async (msg) => { await msg.channel.send('Liste des backups en cours d\'implémentation.'); });
 defineCommand('backup delete', async (msg) => { await msg.channel.send('Suppression de backup en cours d\'implémentation.'); });
 defineCommand('backup load', async (msg) => { await msg.channel.send('Chargement de backup en cours d\'implémentation.'); });
