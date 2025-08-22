@@ -2745,21 +2745,21 @@ defineCommand('ticket settings', async (msg) => {
     function buildSettingsEmbed() {
         const ch = settings.panelChannelId ? (msg.guild.channels.cache.get(settings.panelChannelId) || null) : null;
         const cat = settings.categoryId ? (msg.guild.channels.cache.get(settings.categoryId) || null) : null;
-        const lines = [
-            `Salon du panel : ${ch ? ch.toString() : 'Aucun'}`,
-            '',
-            `Titre du panel : ${settings.title || 'Aucun'}`,
-            '',
-            `Description du panel : ${settings.description || 'Aucun'}`,
-            '',
-            `Catégorie des tickets : ${cat ? cat.name : 'Aucun'}`,
-            '',
-            `Type : ${settings.type}`,
-            '',
-            `Options :`,
-            settings.options && settings.options.length ? settings.options.map((o,i)=> `${i+1} - ${o}`).join('\n') : '1 - Ouvrir un ticket'
-        ].join('\n');
-        return new EmbedBuilder().setTitle('Ticket Settings').setColor(0xFF0000).setDescription(lines).setFooter({ text: 'ζ͜͡Nexus Support' });
+        const optionsText = (settings.options && settings.options.length)
+            ? settings.options.map((o,i)=> `${i+1} - ${o}`).join('\n')
+            : '1 - Ouvrir un ticket';
+        return new EmbedBuilder()
+            .setTitle('Ticket Settings')
+            .setColor(0xFF0000)
+            .addFields(
+                { name: 'Salon du panel', value: ch ? ch.toString() : 'Aucun', inline: true },
+                { name: 'Titre du panel', value: settings.title || 'Aucun', inline: true },
+                { name: 'Catégorie des tickets', value: cat ? (cat.name || 'Aucun') : 'Aucun', inline: true },
+                { name: 'Type', value: settings.type, inline: true },
+                { name: 'Description du panel', value: settings.description || 'Aucun', inline: true },
+                { name: 'Options', value: optionsText, inline: true }
+            )
+            .setFooter({ text: 'ζ͜͡Nexus Support' });
     }
 
     function buildMenu(customId) {
