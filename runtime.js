@@ -2949,8 +2949,6 @@ client.on('messageCreate', async (message) => {
     } catch {}
 });
 
-client.login(TOKEN);
-
 // Extend perms: manage per-level command allowlists
 defineCommand('perm addcmd', async (msg) => {
     if (!requireOwner(msg)) return;
@@ -2979,10 +2977,6 @@ defineCommand('perm delcmd', async (msg) => {
     await msg.channel.send(`Commande retirée du niveau ${level}.`);
 });
 
-// Update perms display to include commands per level
-// (Hooked in the existing +perms command above)
-// ... existing code ...
-
 client.on('voiceStateUpdate', async (oldState, newState) => {
     try {
         const guild = newState.guild || oldState.guild;
@@ -2990,7 +2984,6 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
         const cfg = getGuildConfig(guild.id);
         const tv = cfg.settings && cfg.settings.tempvoc;
         if (!tv || !tv.hubId) return;
-        // User joins hub -> create temp channel
         if ((!oldState.channelId || oldState.channelId !== tv.hubId) && newState.channelId === tv.hubId) {
             const displayName = newState.member?.displayName || newState.member?.user?.username || 'user';
             const name = (tv.namePattern || '<user>.dpz').replace(/<user>/g, displayName);
@@ -2999,7 +2992,6 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
             const temp = await guild.channels.create(opts).catch(()=>null);
             if (temp) await newState.setChannel(temp).catch(()=>{});
         }
-        // Clean up empty temp channels created under category or named by pattern
         if (oldState.channel && oldState.channel.members.size === 0) {
             const ch = oldState.channel;
             const isTempByCat = tv.categoryId && ch.parentId === tv.categoryId && ch.id !== tv.hubId;
@@ -3010,5 +3002,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
         }
     } catch {}
 });
+
+client.login(TOKEN);
 
 
