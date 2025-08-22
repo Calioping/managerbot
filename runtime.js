@@ -468,7 +468,7 @@ defineCommand('help all', async (msg) => {
     const cfg = getGuildConfig(msg.guild.id);
     const currentPrefix = process.env.CHILD_PREFIX || cfg.prefix || PREFIX;
 
-    const pages = [
+    const basePages = [
         { title: 'Public', cmds: [
             'help','pic [membre]','banner [membre]','server pic','server banner','emoji <émoji>','support'
         ]},
@@ -494,6 +494,17 @@ defineCommand('help all', async (msg) => {
             'cleanup <salon>','clear limit <nombre>','allbots','botadmins','alladmins','boosters','rolemembers <rôle>','serverinfo','vocinfo','role <rôle>','channel [salon]','user [membre]','member [membre]','unban <membre>','lockall','unlockall','hide [salon]','unhide [salon]','hideall [salon]','unhideall [salon]','voicemove [salon] [salon]','voicekick <membre>','bringall [salon]','slowmode <durée> [salon]','muterole','set muterole <rôle>','antispam <on/off>','antilink <on/off>','antimassmention <on/off>','badword <add/del> <mot>','badword list','clear badwords','piconly <add/del> [salon]','nolog <add/del> [salon]','join settings','leave settings','timeout <on/off>','modlog <on/off> [salon]','messagelog <on/off> [salon]','voicelog <on/off> [salon]','boostlog <on/off> [salon]','rolelog <on/off> [salon]','autopublish <on/off>','embed','create [émoji] [nom]','newsticker [nom]','massiverole [rôle] [rôle]','renew [salon]','rename <nom>'
         ]}
     ];
+
+    const permTitleToLevel = { 'Perm 1': '1', 'Perm 2': '2', 'Perm 3': '3', 'Perm 4': '4', 'Perm 5': '5', 'Perm 6': '6', 'Perm 9 / Admin': '9' };
+    const permCmds = (cfg.settings && cfg.settings.permCommands) ? cfg.settings.permCommands : { '1': [], '2': [], '3': [], '4': [], '5': [], '6': [], '9': [] };
+
+    const pages = basePages.map(p => {
+        const lvl = permTitleToLevel[p.title];
+        if (!lvl) return p;
+        const dyn = Array.isArray(permCmds[lvl]) ? permCmds[lvl] : [];
+        const merged = Array.from(new Set([...(p.cmds || []), ...dyn]));
+        return { title: p.title, cmds: merged };
+    });
 
     const note = 'Les paramètres peuvent être des noms, des mentions, ou des IDs.\nSi ce ne sont pas des mentions ils doivent être séparés par ,,';
 
