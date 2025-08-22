@@ -2606,21 +2606,24 @@ defineCommand('massiverole', async (msg) => {
             const targetRole = msg.guild.roles.cache.get(settings.roleId);
             if (!targetRole) { await msg.channel.send('Rôle introuvable.'); return; }
             const members = await msg.guild.members.fetch();
-            let affected = 0;
-            for (const member of members.values()) {
-                if (settings.filter === 'members' && member.user.bot) continue;
-                if (settings.filter === 'bots' && !member.user.bot) continue;
+            const candidates = Array.from(members.values()).filter(member => {
+                if (settings.filter === 'members' && member.user.bot) return false;
+                if (settings.filter === 'bots' && !member.user.bot) return false;
+                if (settings.action === 'add' && member.roles.cache.has(targetRole.id)) return false;
+                if (settings.action === 'del' && !member.roles.cache.has(targetRole.id)) return false;
+                return true;
+            });
+            const startMsg = await msg.channel.send(`Je suis en train d'${settings.action === 'add' ? 'ajouter' : 'retirer'} le rôle à ${candidates.length} membres`);
+            let ok = 0, fail = 0;
+            for (const member of candidates) {
                 try {
-                    if (settings.action === 'add' && !member.roles.cache.has(targetRole.id)) {
-                        await member.roles.add(targetRole);
-                        affected++;
-                    } else if (settings.action === 'del' && member.roles.cache.has(targetRole.id)) {
-                        await member.roles.remove(targetRole);
-                        affected++;
-                    }
-                } catch {}
+                    if (settings.action === 'add') { await member.roles.add(targetRole); ok++; }
+                    else { await member.roles.remove(targetRole); ok++; }
+                } catch { fail++; }
             }
-            await msg.channel.send(`${affected} membre(s) mis à jour.`);
+            const done1 = await msg.channel.send(`J'ai ${settings.action === 'add' ? 'ajouté' : 'retiré'} le rôle à ${ok} membres`);
+            const done2 = await msg.channel.send(`Je n'ai pas pu ${settings.action === 'add' ? 'ajouter' : 'retirer'} le rôle à ${fail} membres`);
+            setTimeout(async () => { try { await startMsg.delete().catch(()=>{}); await done1.delete().catch(()=>{}); await done2.delete().catch(()=>{}); } catch {} }, 8000);
         }
         try { await sent.edit({ embeds: [buildEmbed()] }); } catch {}
     });
