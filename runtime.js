@@ -485,7 +485,7 @@ defineCommand('help all', async (msg) => {
 
     const basePages = [
         { title: 'Public', cmds: [
-            'help','pic [membre]','banner [membre]','server pic','server banner','emoji <émoji>','support'
+            'pic [membre]','banner [membre]','server pic','server banner','emoji <émoji>','support'
         ]},
         { title: 'Perm 1', cmds: [
             'warn <membre> [raison]','unmute <membre>'
