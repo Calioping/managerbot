@@ -2284,7 +2284,54 @@ defineCommand('backup list', async (msg) => {
         await msg.channel.send('Impossible d\'afficher la liste des backups.');
     }
 });
-defineCommand('backup delete', async (msg) => { await msg.channel.send('Suppression de backup en cours d\'implémentation.'); });
+defineCommand('backup delete', async (msg) => {
+    if (!requireOwner(msg)) return;
+    const parts = msg.content.split(/\s+/).slice(2);
+    let id = (parts[0] || '').trim();
+    if (!id) return void msg.channel.send('Usage: +backup delete <ID>');
+
+    try {
+        const dir = path.join(process.cwd(), 'data', 'backups');
+        const indexFile = path.join(dir, 'index.json');
+        const filePath = path.join(dir, `${id}.json`);
+        if (!fs.existsSync(filePath)) return void msg.channel.send('Backup introuvable.');
+        const payload = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        const type = (payload && payload.type) || (id.startsWith('emoji_') ? 'emoji' : 'server');
+        const guildName = payload.guildName || 'Inconnu';
+        const guildId = payload.guildId || '—';
+
+        // Prepare embed with info
+        const embed = new EmbedBuilder()
+            .setTitle(type === 'emoji' ? 'Backup Emoji supprimée' : 'Backup Serveur supprimée')
+            .setColor(0xFF0000)
+            .addFields(
+                { name: 'Serveur', value: `${guildName} (${guildId})`, inline: false },
+                { name: 'ID', value: id, inline: true },
+                ...(type === 'emoji'
+                    ? [{ name: 'Nombre d\'emojis', value: String((payload.emojis || []).length), inline: true }]
+                    : [
+                        { name: 'Rôles', value: String((payload.roles || []).length), inline: true },
+                        { name: 'Salons', value: String((payload.channels || []).length), inline: true }
+                      ])
+            );
+
+        // Delete file
+        try { fs.unlinkSync(filePath); } catch {}
+        // Update index
+        try {
+            if (fs.existsSync(indexFile)) {
+                const index = JSON.parse(fs.readFileSync(indexFile, 'utf8'));
+                index.items = (index.items || []).filter(x => x.id !== id);
+                fs.writeFileSync(indexFile, JSON.stringify(index, null, 2));
+            }
+        } catch {}
+
+        await msg.channel.send({ embeds: [embed] });
+        await msg.channel.send(`Cet backup de ${type === 'emoji' ? 'emojis' : 'serveur'} a bien été supprimée.`);
+    } catch {
+        await msg.channel.send('Impossible de supprimer cette backup.');
+    }
+});
 defineCommand('backup load', async (msg) => {
     if (!requireOwner(msg)) return;
     const parts = msg.content.split(/\s+/).slice(2);
