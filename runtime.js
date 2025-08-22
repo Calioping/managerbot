@@ -1979,7 +1979,7 @@ defineCommand('giveaway', async (msg) => {
                     `Se termine: dans ${humanizeMsFr(settings.durationMs)}`
                 ].join('\n'))
                 .setColor(0xFF0000)
-                .setFooter({ text: `${msg.guild.name}•Aujourd’hui à ${timeStr}` });
+                .setFooter({ text: `${msg.guild.name}•Aujourd'hui à ${timeStr}` });
             const gwMsg = await channel.send({ embeds: [gwEmbed] });
             const emojiIdent = extractEmojiIdentifier(settings.reaction);
             try { await gwMsg.react(emojiIdent); } catch {}
@@ -2162,12 +2162,27 @@ defineCommand('backup', async (msg) => {
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         const ts = new Date();
         const tsStr = ts.toISOString().replace(/[:.]/g, '-');
+        const indexFile = path.join(dir, 'index.json');
+        let index = { items: [] };
+        try { if (fs.existsSync(indexFile)) index = JSON.parse(fs.readFileSync(indexFile, 'utf8')); } catch {}
         if (sub === 'emoji') {
             const emojis = guild.emojis.cache.map(e => ({ id: e.id, name: e.name, animated: e.animated, url: e.url }));
             const payload = { type: 'emoji', guildId: guild.id, guildName: guild.name, createdAt: ts.toISOString(), emojis };
-            const file = path.join(dir, `emoji_${guild.id}_${tsStr}.json`);
+            const idStr = `emoji_${guild.id}_${tsStr}`;
+            const file = path.join(dir, `${idStr}.json`);
             fs.writeFileSync(file, JSON.stringify(payload, null, 2));
-            return void msg.channel.send(`Backup emoji créée pour ${guild.name} (${emojis.length} éléments).`);
+            index.items.push({ id: idStr, type: 'emoji', guildId: guild.id, guildName: guild.name, createdAt: ts.toISOString() });
+            fs.writeFileSync(indexFile, JSON.stringify(index, null, 2));
+            const embed = new EmbedBuilder()
+                .setTitle('Backup Emoji créée')
+                .setColor(0xFF0000)
+                .addFields(
+                    { name: 'Serveur', value: `${guild.name} (${guild.id})`, inline: false },
+                    { name: 'Nombre d\'emojis', value: String(emojis.length), inline: true },
+                    { name: 'ID de la backup', value: idStr, inline: true }
+                )
+                .setFooter({ text: `Créée le ${ts.toLocaleDateString('fr-FR')} à ${ts.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}` });
+            return void msg.channel.send({ embeds: [embed] });
         }
         if (sub === 'server') {
             const roles = guild.roles.cache
@@ -2175,15 +2190,53 @@ defineCommand('backup', async (msg) => {
                 .map(r => ({ id: r.id, name: r.name, color: r.hexColor, hoist: r.hoist, mentionable: r.mentionable, permissions: r.permissions.bitfield.toString() }));
             const channels = guild.channels.cache.map(ch => ({ id: ch.id, name: ch.name, type: ch.type, parentId: ch.parentId || null, position: ch.position, topic: ch.topic || null, rateLimitPerUser: ch.rateLimitPerUser || 0 }));
             const payload = { type: 'server', guildId: guild.id, guildName: guild.name, createdAt: ts.toISOString(), iconURL: guild.iconURL(), bannerURL: guild.bannerURL(), roles, channels };
-            const file = path.join(dir, `server_${guild.id}_${tsStr}.json`);
+            const idStr = `server_${guild.id}_${tsStr}`;
+            const file = path.join(dir, `${idStr}.json`);
             fs.writeFileSync(file, JSON.stringify(payload, null, 2));
-            return void msg.channel.send(`Backup serveur créée pour ${guild.name}.`);
+            index.items.push({ id: idStr, type: 'server', guildId: guild.id, guildName: guild.name, createdAt: ts.toISOString() });
+            fs.writeFileSync(indexFile, JSON.stringify(index, null, 2));
+            const embed = new EmbedBuilder()
+                .setTitle('Backup Serveur créée')
+                .setColor(0xFF0000)
+                .addFields(
+                    { name: 'Serveur', value: `${guild.name} (${guild.id})`, inline: false },
+                    { name: 'Rôles', value: String(roles.length), inline: true },
+                    { name: 'Salons', value: String(channels.length), inline: true },
+                    { name: 'ID de la backup', value: idStr, inline: false }
+                )
+                .setFooter({ text: `Créée le ${ts.toLocaleDateString('fr-FR')} à ${ts.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}` });
+            return void msg.channel.send({ embeds: [embed] });
         }
     } catch (e) {
         return void msg.channel.send('Erreur lors de la création de la backup.');
     }
 });
-defineCommand('backup list', async (msg) => { await msg.channel.send('Liste des backups en cours d\'implémentation.'); });
+defineCommand('backup list', async (msg) => {
+    try {
+        const dir = path.join(process.cwd(), 'data', 'backups');
+        const indexFile = path.join(dir, 'index.json');
+        if (!fs.existsSync(indexFile)) return void msg.channel.send('Aucune backup.');
+        const index = JSON.parse(fs.readFileSync(indexFile, 'utf8'));
+        const items = (index.items || []).filter(x => x.guildId === msg.guild.id);
+        if (!items.length) return void msg.channel.send('Aucune backup pour ce serveur.');
+        const embeds = [];
+        for (const it of items.slice(-10).reverse()) {
+            const e = new EmbedBuilder()
+                .setTitle(it.type === 'emoji' ? 'Backup Emoji' : 'Backup Serveur')
+                .setColor(0xFF0000)
+                .addFields(
+                    { name: 'Serveur', value: `${it.guildName} (${it.guildId})`, inline: false },
+                    { name: 'ID', value: it.id, inline: true },
+                    { name: 'Créée le', value: new Date(it.createdAt).toLocaleString('fr-FR'), inline: true }
+                );
+            embeds.push(e);
+        }
+        // Send as multiple embeds (Discord supports up to 10 embeds per message)
+        await msg.channel.send({ embeds });
+    } catch {
+        await msg.channel.send('Impossible d\'afficher la liste des backups.');
+    }
+});
 defineCommand('backup delete', async (msg) => { await msg.channel.send('Suppression de backup en cours d\'implémentation.'); });
 defineCommand('backup load', async (msg) => { await msg.channel.send('Chargement de backup en cours d\'implémentation.'); });
 
