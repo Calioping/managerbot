@@ -2238,7 +2238,109 @@ defineCommand('backup list', async (msg) => {
     }
 });
 defineCommand('backup delete', async (msg) => { await msg.channel.send('Suppression de backup en cours d\'implémentation.'); });
-defineCommand('backup load', async (msg) => { await msg.channel.send('Chargement de backup en cours d\'implémentation.'); });
+defineCommand('backup load', async (msg) => {
+    if (!requireOwner(msg)) return;
+    const parts = msg.content.split(/\s+/).slice(2);
+    const idOrType = (parts[0] || '').toLowerCase();
+    let id = parts[1] || '';
+    // Allow calling with just ID: +backup load <id>
+    if (!id) { id = idOrType; }
+
+    if (!id) return void msg.channel.send('Usage: +backup load <ID>');
+
+    const dir = path.join(process.cwd(), 'data', 'backups');
+    const filePath = path.join(dir, `${id}.json`);
+    if (!fs.existsSync(filePath)) return void msg.channel.send('Backup introuvable.');
+    let payload;
+    try { payload = JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch { return void msg.channel.send('Backup invalide.'); }
+
+    const type = (payload && payload.type) || (id.startsWith('emoji_') ? 'emoji' : 'server');
+    if (!['emoji','server'].includes(type)) return void msg.channel.send('Type de backup inconnu.');
+
+    const infoEmbed = new EmbedBuilder()
+        .setTitle(type === 'emoji' ? 'Charger une backup d\'emojis' : 'Charger une backup de serveur')
+        .setColor(0xFF0000)
+        .addFields(
+            { name: 'Serveur source', value: `${payload.guildName || 'Inconnu'} (${payload.guildId || '—'})`, inline: false },
+            { name: 'ID de backup', value: id, inline: true },
+            ...(type === 'emoji'
+                ? [{ name: 'Nombre d\'emojis', value: String((payload.emojis || []).length), inline: true }]
+                : [
+                    { name: 'Rôles', value: String((payload.roles || []).length), inline: true },
+                    { name: 'Salons', value: String((payload.channels || []).length), inline: true }
+                  ])
+        )
+        .setFooter({ text: 'Confirmation requise' });
+
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('bk_confirm').setLabel('Confirmer').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('bk_cancel').setLabel('Annuler').setStyle(ButtonStyle.Danger)
+    );
+    const sent = await msg.channel.send({ embeds: [infoEmbed], components: [row] });
+    const collector = sent.createMessageComponentCollector({ time: 60 * 1000 });
+    collector.on('collect', async (i) => {
+        if (i.user.id !== msg.author.id) return i.reply({ content: 'Action réservée à l\'auteur.', ephemeral: true });
+        if (i.customId === 'bk_cancel') {
+            await i.update({ content: 'Chargement annulé.', embeds: [], components: [] });
+            return;
+        }
+        if (i.customId !== 'bk_confirm') return;
+        await i.update({ content: 'Chargement en cours...', embeds: [], components: [] });
+
+        let createdRoles = 0, createdChannels = 0, createdEmojis = 0;
+        try {
+            if (type === 'emoji') {
+                const list = payload.emojis || [];
+                for (const e of list) {
+                    try {
+                        await msg.guild.emojis.create({ attachment: e.url, name: e.name });
+                        createdEmojis++;
+                    } catch {}
+                }
+            } else {
+                // Create roles (basic attributes)
+                const roles = payload.roles || [];
+                for (const r of roles) {
+                    try {
+                        await msg.guild.roles.create({ name: r.name, color: r.color || undefined, hoist: !!r.hoist, mentionable: !!r.mentionable });
+                        createdRoles++;
+                    } catch {}
+                }
+                // Create categories first
+                const cats = (payload.channels || []).filter(c => c.type === 4);
+                const catIdMap = new Map();
+                for (const c of cats) {
+                    try {
+                        const cat = await msg.guild.channels.create({ name: c.name, type: 4, position: c.position });
+                        catIdMap.set(c.id, cat.id);
+                        createdChannels++;
+                    } catch {}
+                }
+                // Create other channels (text 0, voice 2)
+                const others = (payload.channels || []).filter(c => c.type !== 4);
+                for (const c of others) {
+                    try {
+                        const opts = { name: c.name, type: c.type };
+                        const parentMapped = c.parentId && catIdMap.get(c.parentId);
+                        if (parentMapped) opts.parent = parentMapped;
+                        if (c.type === 0 && typeof c.rateLimitPerUser === 'number') opts.rateLimitPerUser = c.rateLimitPerUser;
+                        if (c.type === 0 && c.topic) opts.topic = c.topic;
+                        await msg.guild.channels.create(opts);
+                        createdChannels++;
+                    } catch {}
+                }
+            }
+        } catch {}
+
+        const done = new EmbedBuilder()
+            .setTitle('Backup chargée')
+            .setColor(0x00AA00)
+            .setDescription(type === 'emoji'
+                ? `Import d'emojis terminé: ${createdEmojis}/${(payload.emojis||[]).length}`
+                : `Rôles créés: ${createdRoles}/${(payload.roles||[]).length}\nSalons créés: ${createdChannels}/${(payload.channels||[]).length}`);
+        await msg.channel.send({ embeds: [done] });
+    });
+});
 
 // Create emoji
 defineCommand('create', async (msg) => {
