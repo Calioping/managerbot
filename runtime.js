@@ -2300,9 +2300,9 @@ defineCommand('backup delete', async (msg) => {
         const guildName = payload.guildName || 'Inconnu';
         const guildId = payload.guildId || '—';
 
-        // Prepare embed with info
-        const embed = new EmbedBuilder()
-            .setTitle(type === 'emoji' ? 'Backup Emoji supprimée' : 'Backup Serveur supprimée')
+        // Confirmation embed
+        const info = new EmbedBuilder()
+            .setTitle(type === 'emoji' ? 'Supprimer une backup d\'emojis' : 'Supprimer une backup de serveur')
             .setColor(0xFF0000)
             .addFields(
                 { name: 'Serveur', value: `${guildName} (${guildId})`, inline: false },
@@ -2313,23 +2313,61 @@ defineCommand('backup delete', async (msg) => {
                         { name: 'Rôles', value: String((payload.roles || []).length), inline: true },
                         { name: 'Salons', value: String((payload.channels || []).length), inline: true }
                       ])
-            );
+            )
+            .setFooter({ text: 'Confirmation requise' });
 
-        // Delete file
-        try { fs.unlinkSync(filePath); } catch {}
-        // Update index
-        try {
-            if (fs.existsSync(indexFile)) {
-                const index = JSON.parse(fs.readFileSync(indexFile, 'utf8'));
-                index.items = (index.items || []).filter(x => x.id !== id);
-                fs.writeFileSync(indexFile, JSON.stringify(index, null, 2));
+        const token = `bkdel:${msg.id}:${Date.now()}`;
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`${token}:confirm`).setLabel('Confirmer').setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId(`${token}:cancel`).setLabel('Annuler').setStyle(ButtonStyle.Secondary)
+        );
+        const prompt = await msg.channel.send({ embeds: [info], components: [row] });
+
+        const collector = prompt.createMessageComponentCollector({ time: 60 * 1000 });
+        collector.on('collect', async (i) => {
+            if (i.user.id !== msg.author.id) return i.reply({ content: 'Action réservée à l\'auteur.', ephemeral: true });
+            if (!i.customId.startsWith(token)) return;
+            const action = i.customId.split(':').pop();
+            if (action === 'cancel') {
+                await i.update({ content: 'Suppression annulée.', embeds: [], components: [] });
+                return;
             }
-        } catch {}
+            await i.update({ content: 'Suppression en cours...', embeds: [], components: [] });
 
-        await msg.channel.send({ embeds: [embed] });
-        await msg.channel.send(`Cet backup de ${type === 'emoji' ? 'emojis' : 'serveur'} a bien été supprimée.`);
+            // Delete file
+            let deleted = false;
+            try { fs.unlinkSync(filePath); deleted = true; } catch {}
+            // Update index
+            try {
+                if (fs.existsSync(indexFile)) {
+                    const idx = JSON.parse(fs.readFileSync(indexFile, 'utf8'));
+                    idx.items = (idx.items || []).filter(x => x.id !== id);
+                    fs.writeFileSync(indexFile, JSON.stringify(idx, null, 2));
+                }
+            } catch {}
+
+            if (!deleted) {
+                return void msg.channel.send('Impossible de supprimer cette backup.');
+            }
+
+            const done = new EmbedBuilder()
+                .setTitle(type === 'emoji' ? 'Backup Emoji supprimée' : 'Backup Serveur supprimée')
+                .setColor(0xFF0000)
+                .addFields(
+                    { name: 'Serveur', value: `${guildName} (${guildId})`, inline: false },
+                    { name: 'ID', value: id, inline: true },
+                    ...(type === 'emoji'
+                        ? [{ name: 'Nombre d\'emojis', value: String((payload.emojis || []).length), inline: true }]
+                        : [
+                            { name: 'Rôles', value: String((payload.roles || []).length), inline: true },
+                            { name: 'Salons', value: String((payload.channels || []).length), inline: true }
+                          ])
+                );
+            await msg.channel.send({ embeds: [done] });
+            await msg.channel.send(`Cet backup de ${type === 'emoji' ? 'emojis' : 'serveur'} a bien été supprimée.`);
+        });
     } catch {
-        await msg.channel.send('Impossible de supprimer cette backup.');
+        await msg.channel.send('Impossible d\'initialiser la suppression.');
     }
 });
 defineCommand('backup load', async (msg) => {
