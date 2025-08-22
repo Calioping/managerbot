@@ -468,6 +468,21 @@ defineCommand('help all', async (msg) => {
     const cfg = getGuildConfig(msg.guild.id);
     const currentPrefix = process.env.CHILD_PREFIX || cfg.prefix || PREFIX;
 
+    // access control: only owners or users with any perm role
+    const authorId = msg.author.id;
+    const member = msg.member;
+    const ownerOk = owners.has(authorId) || authorId === OWNER_ID || (cfg.owners||[]).includes(authorId);
+    let roleOk = false;
+    if (member && cfg.settings && cfg.settings.permLevels) {
+        for (const lvl of Object.keys(cfg.settings.permLevels)) {
+            for (const rid of (cfg.settings.permLevels[lvl]||[])) {
+                if (member.roles.cache.has(rid)) { roleOk = true; break; }
+            }
+            if (roleOk) break;
+        }
+    }
+    if (!ownerOk && !roleOk) { await msg.channel.send('Vous n\'avez pas accès a ce help'); return; }
+
     const basePages = [
         { title: 'Public', cmds: [
             'help','pic [membre]','banner [membre]','server pic','server banner','emoji <émoji>','support'
