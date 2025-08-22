@@ -2857,7 +2857,7 @@ defineCommand('ticket settings', async (msg) => {
         try { await sent.edit({ embeds: [buildSettingsEmbed()] }); } catch {}
     });
 });
-defineCommand('claim', async (msg) => { await msg.channel.send('Claim en cours d\'implémentation.'); });
+defineCommand('claim', async (msg) => { await msg.channel.send(`Le ticket a été claim par ${msg.author}`); });
 defineCommand('add', async (msg) => { await msg.channel.send('Ajout au ticket en cours d\'implémentation.'); });
 defineCommand('del', async (msg) => { await msg.channel.send('Retrait du ticket en cours d\'implémentation.'); });
 defineCommand('close', async (msg) => { await msg.channel.send('Fermeture du ticket en cours d\'implémentation.'); });
