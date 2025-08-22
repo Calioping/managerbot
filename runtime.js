@@ -2758,7 +2758,64 @@ defineCommand('ticket settings', async (msg) => {
         } else if (choice === 'set_category') {
             const v = await ask('Mentionne la catégorie des tickets ou donne un ID :'); if (v===null) return; const id = v.replace(/[^0-9]/g, ''); const cat = msg.guild.channels.cache.get(id) || msg.mentions.channels.first(); if (!cat || cat.type !== 4) return; settings.categoryId = cat.id;
         } else if (choice === 'add_option') {
-            const v = await ask('Label de la nouvelle option :'); if (v===null) return; settings.options.push(v.slice(0, 100));
+            // Start option editor
+            const opt = { name: 'Ouvrir le ticket', description: '', emoji: '', categoryId: null, requiredRoleIds: [], bannedRoleIds: [], ticketPermRoleIds: [] };
+            function buildOptEmbed() {
+                return new EmbedBuilder()
+                    .setTitle("Ajout d'une option")
+                    .setColor(0xFF0000)
+                    .addFields(
+                        { name: "Nom de l'option", value: opt.name || 'Ouvrir le ticket', inline: true },
+                        { name: 'Description', value: opt.description || 'Aucun', inline: true },
+                        { name: 'Emoji', value: opt.emoji || 'Aucun', inline: true },
+                        { name: 'Catégorie', value: opt.categoryId ? (msg.guild.channels.cache.get(opt.categoryId)?.name || opt.categoryId) : 'Aucun', inline: true },
+                        { name: 'Rôles Requis', value: opt.requiredRoleIds.length ? opt.requiredRoleIds.map(id=>`<@&${id}>`).join(', ') : 'Aucun', inline: true },
+                        { name: 'Rôles Interdits', value: opt.bannedRoleIds.length ? opt.bannedRoleIds.map(id=>`<@&${id}>`).join(', ') : 'Aucun', inline: true },
+                        { name: 'Permissions Tickets', value: opt.ticketPermRoleIds.length ? opt.ticketPermRoleIds.map(id=>`<@&${id}>`).join(', ') : 'Aucun', inline: true }
+                    )
+                    .setFooter({ text: 'ζ͜͡Nexus Support' });
+            }
+            function buildOptMenu(cid) {
+                return new ActionRowBuilder().addComponents(
+                    new StringSelectMenuBuilder()
+                        .setCustomId(cid)
+                        .setPlaceholder('Configurer option')
+                        .addOptions(
+                            { label: 'Modifier le nom', value: 'name' },
+                            { label: 'Modifier la description', value: 'desc' },
+                            { label: 'Supprimer la description', value: 'desc_clear' },
+                            { label: "Modifier l'emoji", value: 'emoji' },
+                            { label: "Supprimer l'emoji", value: 'emoji_clear' },
+                            { label: 'Modifier la catégorie', value: 'category' },
+                            { label: 'Supprimer la catégorie', value: 'category_clear' },
+                            { label: 'Modifier les rôles requis', value: 'req_roles' },
+                            { label: 'Modifier les rôles bannis', value: 'ban_roles' },
+                            { label: 'Modifier les rôles permissions tickets', value: 'perm_roles' },
+                            { label: 'Sauvegarder', value: 'save' }
+                        )
+                );
+            }
+            const optMenuId = `ticket_opt:${msg.id}:${Date.now()}`;
+            const optMsg = await msg.channel.send({ embeds: [buildOptEmbed()], components: [buildOptMenu(optMenuId)] });
+            const optCollector = optMsg.createMessageComponentCollector({ time: 10 * 60 * 1000 });
+            optCollector.on('collect', async (ii) => {
+                if (ii.user.id !== msg.author.id) return ii.reply({ content: 'Seul l\'auteur peut modifier.', ephemeral: true });
+                if (ii.customId !== optMenuId) return;
+                const val = ii.values[0];
+                await ii.deferUpdate();
+                if (val === 'name') { const v = await ask('Nom :'); if (v===null) return; opt.name = v.slice(0, 80); }
+                else if (val === 'desc') { const v = await ask('Description :'); if (v===null) return; opt.description = v.slice(0, 1000); }
+                else if (val === 'desc_clear') { opt.description = ''; }
+                else if (val === 'emoji') { const v = await ask('Emoji (unicode ou <:name:id>) :'); if (v===null) return; opt.emoji = v.trim(); }
+                else if (val === 'emoji_clear') { opt.emoji = ''; }
+                else if (val === 'category') { const v = await ask('Catégorie (mention/ID) :'); if (v===null) return; const id = v.replace(/[^0-9]/g,''); const cat = msg.guild.channels.cache.get(id) || msg.mentions.channels.first(); if (cat && cat.type===4) opt.categoryId = cat.id; }
+                else if (val === 'category_clear') { opt.categoryId = null; }
+                else if (val === 'req_roles') { const v = await ask('Mentionne les rôles requis (séparés) :'); if (v===null) return; const roles = Array.from(msg.mentions.roles.values()).map(r=>r.id); opt.requiredRoleIds = roles; }
+                else if (val === 'ban_roles') { const v = await ask('Mentionne les rôles bannis (séparés) :'); if (v===null) return; const roles = Array.from(msg.mentions.roles.values()).map(r=>r.id); opt.bannedRoleIds = roles; }
+                else if (val === 'perm_roles') { const v = await ask('Mentionne les rôles ayant des permissions sur les tickets :'); if (v===null) return; const roles = Array.from(msg.mentions.roles.values()).map(r=>r.id); opt.ticketPermRoleIds = roles; }
+                else if (val === 'save') { settings.options.push(opt); optCollector.stop('saved'); }
+                try { await optMsg.edit({ embeds: [buildOptEmbed()] }); } catch {}
+            });
         } else if (choice === 'del_option') {
             if (!settings.options.length) return;
             const v = await ask(`Quel numéro d\'option supprimer ? (1-${settings.options.length})`); if (v===null) return; const idx = parseInt(v,10)-1; if (idx>=0 && idx<settings.options.length) settings.options.splice(idx,1);
