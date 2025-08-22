@@ -422,7 +422,7 @@ function buildHelpEmbed(categoryKey, guildId) {
         parts.push('');
         if (parts.join('\n').length > 3800) break;
     }
-    embed.setDescription(parts.join('\\n').slice(0, 4000));
+    embed.setDescription(parts.join('\n').slice(0, 4000));
     embed.setFooter({ text: 'ζ͜͡Nexus Support' });
     return embed;
 }
@@ -1708,7 +1708,7 @@ defineCommand('warn', async (msg) => {
 });
 defineCommand('renew', async (msg) => { const ch = msg.channel; const pos = ch.position; const newCh = await ch.clone(); await ch.delete().catch(()=>{}); try { await newCh.setPosition(pos); } catch {} });
 defineCommand('unban', async (msg) => { const id = msg.content.split(/\s+/)[1]; if (!id) return void msg.channel.send('Usage: +unban <ID>'); await msg.guild.bans.remove(id).catch(()=>{}); await msg.react('✅'); });
-defineCommand('unbanall', async (msg) => { const bans = await msg.guild.bans.fetch(); for (const b of bans.values()) { try { await msg.guild.bans.remove(b.user.id); } catch {} } await msg.react('✅'); });
+defineCommand('unbanall', async (msg) => { const bans = await msg.guild.bans.fetch(); for (const b of bans.values()) { try { await msg.guild.bans.remove(b.user.id); } catch {} } await msg.channel.send('Tous les membres bannis ont été débannis.'); });
 
 // Server management utilities
 defineCommand('choose', async (msg) => { const items = msg.content.split(/\s+/).slice(1); if (!items.length) return void msg.channel.send('Fournis des options.'); const pick = items[Math.floor(Math.random()*items.length)]; await msg.channel.send('Choix: ' + pick); });
