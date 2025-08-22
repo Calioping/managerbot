@@ -2913,6 +2913,15 @@ client.on('messageCreate', async (message) => {
         const currentPrefix = process.env.CHILD_PREFIX || cfg.prefix || PREFIX;
         if (!message.content.startsWith(currentPrefix)) return;
         if (blacklist.has(message.author.id) || (cfg.blacklist||[]).includes(message.author.id)) return;
+        // Permission gating: if any permLevels are set, only those roles (or owners) can use commands
+        const member = message.member;
+        const levels = (cfg.settings && cfg.settings.permLevels) || { '1': [], '2': [], '3': [], '4': [], '5': [], '6': [], '9': [] };
+        const allRoleIds = new Set([...(levels['1']||[]), ...(levels['2']||[]), ...(levels['3']||[]), ...(levels['4']||[]), ...(levels['5']||[]), ...(levels['6']||[]), ...(levels['9']||[])]);
+        const isOwner = owners.has(message.author.id) || message.author.id === OWNER_ID;
+        if (allRoleIds.size > 0 && !isOwner) {
+            const hasAny = member.roles.cache.some(r => allRoleIds.has(r.id));
+            if (!hasAny) return; // silently ignore if no perms
+        }
         const tokens = message.content.slice(currentPrefix.length).trim().split(/\s+/);
         const tryTwo = (tokens[0] + (tokens[1] ? ' ' + tokens[1] : '')).toLowerCase();
         const tryOne = tokens[0].toLowerCase();
