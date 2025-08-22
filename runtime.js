@@ -1701,8 +1701,28 @@ defineCommand('hide', async (msg) => { await msg.channel.permissionOverwrites.ed
 defineCommand('unhide', async (msg) => { await msg.channel.permissionOverwrites.edit(msg.guild.roles.everyone, { ViewChannel: true }); await msg.react('✅'); });
 defineCommand('hideall', async (msg) => { for (const ch of msg.guild.channels.cache.values()) { try { await ch.permissionOverwrites.edit(msg.guild.roles.everyone, { ViewChannel: false }); } catch {} } await msg.react('✅'); });
 defineCommand('unhideall', async (msg) => { for (const ch of msg.guild.channels.cache.values()) { try { await ch.permissionOverwrites.edit(msg.guild.roles.everyone, { ViewChannel: true }); } catch {} } await msg.react('✅'); });
-defineCommand('lock', async (msg) => { await msg.channel.permissionOverwrites.edit(msg.guild.roles.everyone, { SendMessages: false }); await msg.react('✅'); });
-defineCommand('unlock', async (msg) => { await msg.channel.permissionOverwrites.edit(msg.guild.roles.everyone, { SendMessages: true }); await msg.react('✅'); });
+defineCommand('lock', async (msg) => {
+	if (!msg.guild) return;
+	const parts = msg.content.split(/\s+/);
+	const target = msg.mentions.channels.first() || (parts[1] && msg.guild.channels.cache.get(parts[1])) || msg.channel;
+	try {
+		await target.permissionOverwrites.edit(msg.guild.roles.everyone, { SendMessages: false });
+		await msg.channel.send(`Le salon (${target}) a été lock`);
+	} catch {
+		await msg.channel.send('Impossible de lock ce salon.');
+	}
+});
+defineCommand('unlock', async (msg) => {
+	if (!msg.guild) return;
+	const parts = msg.content.split(/\s+/);
+	const target = msg.mentions.channels.first() || (parts[1] && msg.guild.channels.cache.get(parts[1])) || msg.channel;
+	try {
+		await target.permissionOverwrites.edit(msg.guild.roles.everyone, { SendMessages: true });
+		await msg.channel.send(`Le salon (${target}) a été unlock`);
+	} catch {
+		await msg.channel.send('Impossible de unlock ce salon.');
+	}
+});
 defineCommand('lockall', async (msg) => { for (const ch of msg.guild.channels.cache.values()) { try { await ch.permissionOverwrites.edit(msg.guild.roles.everyone, { SendMessages: false }); } catch {} } await msg.react('✅'); });
 defineCommand('unlockall', async (msg) => { for (const ch of msg.guild.channels.cache.values()) { try { await ch.permissionOverwrites.edit(msg.guild.roles.everyone, { SendMessages: true }); } catch {} } await msg.react('✅'); });
 defineCommand('mute', async (msg) => { const m = msg.mentions.members.first(); const cfg = getGuildConfig(msg.guild.id); if (!m||!cfg.settings.moderation.muteroleId) return void msg.channel.send('Usage: +mute @membre (muterole requis)'); await m.roles.add(cfg.settings.moderation.muteroleId).catch(()=>{}); await msg.react('✅'); });
