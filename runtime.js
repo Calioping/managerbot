@@ -2532,37 +2532,99 @@ defineCommand('create', async (msg) => {
 defineCommand('newsticker', async (msg) => { await msg.channel.send('Newsticker en cours d\'implémentation.'); });
 defineCommand('massiverole', async (msg) => {
     if (!requireOwner(msg)) return;
-    // Usage: +massiverole <add/del> <@rôle> [in:@rôle] [not:@rôle]
-    const parts = msg.content.split(/\s+/).slice(1);
-    const action = (parts[0] || '').toLowerCase();
-    const targetRole = msg.mentions.roles.first();
-    if (!['add','del'].includes(action) || !targetRole) {
-        return void msg.channel.send('Usage: +massiverole <add/del> <@rôle> [in:@rôle] [not:@rôle]');
-    }
-    const mentionedRoles = Array.from(msg.mentions.roles.values());
-    const filterRoles = mentionedRoles.filter(r => r.id !== targetRole.id);
-    const inRole = filterRoles[0] || null;
-    const notRole = filterRoles[1] || null;
+    const settings = {
+        action: 'add', // 'add' | 'del'
+        roleId: null,
+        filter: 'all' // 'all' | 'members' | 'bots'
+    };
 
-    const members = await msg.guild.members.fetch();
-    let affected = 0;
-    for (const member of members.values()) {
-        if (member.user.bot) continue;
-        if (inRole && !member.roles.cache.has(inRole.id)) continue;
-        if (notRole && member.roles.cache.has(notRole.id)) continue;
-        try {
-            if (action === 'add' && !member.roles.cache.has(targetRole.id)) {
-                await member.roles.add(targetRole);
-                affected++;
-            } else if (action === 'del' && member.roles.cache.has(targetRole.id)) {
-                await member.roles.remove(targetRole);
-                affected++;
+    const actionLabel = () => settings.action === 'add' ? 'Ajouter' : 'Retirer';
+    const filterLabel = () => settings.filter === 'all' ? 'Tout le monde' : settings.filter === 'members' ? 'Membres uniquement' : 'Bots uniquement';
+
+    function buildEmbed() {
+        return new EmbedBuilder()
+            .setTitle('Massrole Settings')
+            .setColor(0xFF0000)
+            .addFields(
+                { name: 'Action', value: actionLabel(), inline: true },
+                { name: 'Rôle', value: settings.roleId ? `<@&${settings.roleId}>` : '@membre', inline: true },
+                { name: 'Filtre', value: filterLabel(), inline: true }
+            );
+    }
+
+    function buildMenu(customId) {
+        return new ActionRowBuilder().addComponents(
+            new StringSelectMenuBuilder()
+                .setCustomId(customId)
+                .setPlaceholder('Configurer / Lancer')
+                .addOptions(
+                    { label: 'Ajouter un rôle', value: 'set_action_add' },
+                    { label: 'Retirer un rôle', value: 'set_action_del' },
+                    { label: 'Modifier le rôle', value: 'set_role' },
+                    { label: 'Modifier le filtre', value: 'set_filter' },
+                    { label: 'Lancer', value: 'run' }
+                )
+        );
+    }
+
+    async function ask(prompt) {
+        const q = await msg.channel.send(prompt);
+        const filter = (m) => m.author.id === msg.author.id && m.channelId === msg.channelId;
+        const collected = await msg.channel.awaitMessages({ filter, max: 1, time: 60_000 });
+        const answer = collected.first();
+        if (!answer) { try { await q.delete().catch(()=>{}); } catch {} return null; }
+        const value = answer.content.trim();
+        try { await answer.delete().catch(()=>{}); } catch {}
+        try { await q.delete().catch(()=>{}); } catch {}
+        return value;
+    }
+
+    const menuId = `massrole:${msg.id}:${Date.now()}`;
+    const sent = await msg.channel.send({ embeds: [buildEmbed()], components: [buildMenu(menuId)] });
+    const collector = sent.createMessageComponentCollector({ time: 10 * 60 * 1000 });
+    collector.on('collect', async (i) => {
+        if (i.user.id !== msg.author.id) return i.reply({ content: 'Seul l\'auteur peut modifier ces paramètres.', ephemeral: true });
+        if (i.customId !== menuId) return;
+        const choice = i.values[0];
+        await i.deferUpdate();
+        if (choice === 'set_action_add') settings.action = 'add';
+        else if (choice === 'set_action_del') settings.action = 'del';
+        else if (choice === 'set_role') {
+            const v = await ask('Mentionne un rôle ou donne un ID :'); if (v === null) return;
+            const id = v.replace(/[^0-9]/g, '');
+            const role = msg.guild.roles.cache.get(id) || msg.mentions.roles.first();
+            if (!role) return;
+            settings.roleId = role.id;
+        } else if (choice === 'set_filter') {
+            const v = await ask('Filtre ? (tout / membres / bots)'); if (v === null) return;
+            const low = v.toLowerCase();
+            if (low.startsWith('memb')) settings.filter = 'members';
+            else if (low.startsWith('bot')) settings.filter = 'bots';
+            else settings.filter = 'all';
+        } else if (choice === 'run') {
+            if (!settings.roleId) { await msg.channel.send('Sélectionne d\'abord un rôle.'); return; }
+            const targetRole = msg.guild.roles.cache.get(settings.roleId);
+            if (!targetRole) { await msg.channel.send('Rôle introuvable.'); return; }
+            const members = await msg.guild.members.fetch();
+            let affected = 0;
+            for (const member of members.values()) {
+                if (settings.filter === 'members' && member.user.bot) continue;
+                if (settings.filter === 'bots' && !member.user.bot) continue;
+                try {
+                    if (settings.action === 'add' && !member.roles.cache.has(targetRole.id)) {
+                        await member.roles.add(targetRole);
+                        affected++;
+                    } else if (settings.action === 'del' && member.roles.cache.has(targetRole.id)) {
+                        await member.roles.remove(targetRole);
+                        affected++;
+                    }
+                } catch {}
             }
-        } catch {}
-    }
-    await msg.channel.send(`${affected} membre(s) mis à jour.`);
+            await msg.channel.send(`${affected} membre(s) mis à jour.`);
+        }
+        try { await sent.edit({ embeds: [buildEmbed()] }); } catch {}
+    });
 });
-
 defineCommand('sync', async (msg) => {
     if (!requireOwner(msg)) return;
     // Usage: +sync <channel/category/all> [#salon]
