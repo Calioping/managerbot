@@ -1736,7 +1736,19 @@ defineCommand('mute', async (msg) => {
 	await msg.channel.send(`${m} a été mute pour \`${reason}\``);
 });
 defineCommand('unmute', async (msg) => { const m = msg.mentions.members.first(); const cfg = getGuildConfig(msg.guild.id); if (!m||!cfg.settings.moderation.muteroleId) return void msg.channel.send('Usage: +unmute @membre'); await m.roles.remove(cfg.settings.moderation.muteroleId).catch(()=>{}); await msg.react('✅'); });
-defineCommand('unmuteall', async (msg) => { const cfg = getGuildConfig(msg.guild.id); if (!cfg.settings.moderation.muteroleId) return; const mems = await msg.guild.members.fetch(); for (const m of mems.values()) { try { await m.roles.remove(cfg.settings.moderation.muteroleId); } catch {} } await msg.react('✅'); });
+defineCommand('unmuteall', async (msg) => {
+	const cfg = getGuildConfig(msg.guild.id);
+	if (!cfg.settings.moderation.muteroleId) return;
+	const roleId = cfg.settings.moderation.muteroleId;
+	const mems = await msg.guild.members.fetch();
+	const toUnmute = mems.filter(m => m.roles.cache.has(roleId));
+	await msg.channel.send(`Je vais unmute ${toUnmute.size} membres`);
+	let success = 0, total = toUnmute.size;
+	for (const m of toUnmute.values()) {
+		try { await m.roles.remove(roleId); success++; } catch {}
+	}
+	await msg.channel.send(`J'ai unmute ${success}/${total} membres`);
+});
 defineCommand('mutelist', async (msg) => { const cfg = getGuildConfig(msg.guild.id); if (!cfg.settings.moderation.muteroleId) return void msg.channel.send('Aucun muterole.'); const role = msg.guild.roles.cache.get(cfg.settings.moderation.muteroleId); const list = (await msg.guild.members.fetch()).filter(m => role && m.roles.cache.has(role.id)); await msg.channel.send('Mutés: ' + list.map(m=>m.user.tag).join(', ').slice(0,1900)); });
 defineCommand('warn', async (msg) => {
     const m = msg.mentions.members.first();
