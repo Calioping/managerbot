@@ -2217,7 +2217,16 @@ defineCommand('backup list', async (msg) => {
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         const indexFile = path.join(dir, 'index.json');
         const args = msg.content.split(/\s+/).slice(2);
-        const filterArg = (args[0] || '').toLowerCase();
+
+        // Parse filters: type (server|emoji) and scope (all|<guildId>)
+        let typeFilter = null;
+        let scopeArg = '';
+        if ((args[0] || '').toLowerCase() === 'server' || (args[0] || '').toLowerCase() === 'emoji') {
+            typeFilter = (args[0] || '').toLowerCase();
+            scopeArg = (args[1] || '').toLowerCase();
+        } else {
+            scopeArg = (args[0] || '').toLowerCase();
+        }
 
         // Load or rebuild index
         let index = { items: [] };
@@ -2247,10 +2256,12 @@ defineCommand('backup list', async (msg) => {
 
         // Filter
         let items = index.items || [];
-        if (filterArg && filterArg !== 'all') {
-            const gid = filterArg.replace(/[^0-9]/g, '');
+        if (typeFilter) items = items.filter(x => x.type === typeFilter);
+        if (scopeArg && scopeArg !== 'all') {
+            const gid = scopeArg.replace(/[^0-9]/g, '');
             if (gid) items = items.filter(x => x.guildId === gid);
-        } else if (!filterArg) {
+            else items = items.filter(x => x.guildId === msg.guild.id);
+        } else if (!scopeArg) {
             items = items.filter(x => x.guildId === msg.guild.id);
         }
         if (!items.length) return void msg.channel.send('Aucune backup.');
