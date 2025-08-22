@@ -2674,7 +2674,116 @@ defineCommand('sync', async (msg) => {
 });
 
 // Ticket-like stubs
-defineCommand('ticket settings', async (msg) => { await msg.channel.send('Ticket settings en cours d\'implémentation.'); });
+defineCommand('ticket settings', async (msg) => {
+    if (!requireOwner(msg)) return;
+    const settings = {
+        panelChannelId: null,
+        title: '',
+        description: '',
+        categoryId: null,
+        type: 'Boutons',
+        options: ['Ouvrir un ticket']
+    };
+
+    function buildSettingsEmbed() {
+        const ch = settings.panelChannelId ? (msg.guild.channels.cache.get(settings.panelChannelId) || null) : null;
+        const cat = settings.categoryId ? (msg.guild.channels.cache.get(settings.categoryId) || null) : null;
+        const lines = [
+            `Salon du panel : ${ch ? ch.toString() : 'Aucun'}`,
+            '',
+            `Titre du panel : ${settings.title || 'Aucun'}`,
+            '',
+            `Description du panel : ${settings.description || 'Aucun'}`,
+            '',
+            `Catégorie des tickets : ${cat ? cat.name : 'Aucun'}`,
+            '',
+            `Type : ${settings.type}`,
+            '',
+            `Options :`,
+            settings.options && settings.options.length ? settings.options.map((o,i)=> `${i+1} - ${o}`).join('\n') : '1 - Ouvrir un ticket'
+        ].join('\n');
+        return new EmbedBuilder().setTitle('Ticket Settings').setColor(0xFF0000).setDescription(lines).setFooter({ text: 'ζ͜͡Nexus Support' });
+    }
+
+    function buildMenu(customId) {
+        return new ActionRowBuilder().addComponents(
+            new StringSelectMenuBuilder()
+                .setCustomId(customId)
+                .setPlaceholder('Configurer / Envoyer')
+                .addOptions(
+                    { label: 'Modifier le salon du panel', value: 'set_channel' },
+                    { label: 'Modifier le titre du panel', value: 'set_title' },
+                    { label: 'Modifier la description du panel', value: 'set_desc' },
+                    { label: 'Modifier le type Boutons/Sélecteurs', value: 'set_type' },
+                    { label: 'Définir une catégorie des tickets', value: 'set_category' },
+                    { label: 'Ajouter une option', value: 'add_option' },
+                    { label: 'Supprimer une option', value: 'del_option' },
+                    { label: 'Envoyer le panel', value: 'send_panel' }
+                )
+        );
+    }
+
+    async function ask(question) {
+        const q = await msg.channel.send(question);
+        const filter = (m) => m.author.id === msg.author.id && m.channelId === msg.channelId;
+        const collected = await msg.channel.awaitMessages({ filter, max: 1, time: 60_000 });
+        const answer = collected.first();
+        if (!answer) { try { await q.delete().catch(()=>{}); } catch {} return null; }
+        const value = answer.content.trim();
+        try { await answer.delete().catch(()=>{}); } catch {}
+        try { await q.delete().catch(()=>{}); } catch {}
+        return value;
+    }
+
+    const menuId = `ticket_settings:${msg.id}:${Date.now()}`;
+    const sent = await msg.channel.send({ embeds: [buildSettingsEmbed()], components: [buildMenu(menuId)] });
+    const collector = sent.createMessageComponentCollector({ time: 10 * 60 * 1000 });
+    collector.on('collect', async (i) => {
+        if (i.user.id !== msg.author.id) return i.reply({ content: 'Seul l\'auteur peut modifier ces paramètres.', ephemeral: true });
+        if (i.customId !== menuId) return;
+        const choice = i.values[0];
+        await i.deferUpdate();
+        if (choice === 'set_channel') {
+            const v = await ask('Mentionne le salon du panel ou donne un ID :'); if (v===null) return;
+            const id = v.replace(/[^0-9]/g, '');
+            const ch = msg.guild.channels.cache.get(id) || msg.mentions.channels.first();
+            if (!ch) return;
+            settings.panelChannelId = ch.id;
+        } else if (choice === 'set_title') {
+            const v = await ask('Titre du panel :'); if (v===null) return; settings.title = v.slice(0, 256);
+        } else if (choice === 'set_desc') {
+            const v = await ask('Description du panel :'); if (v===null) return; settings.description = v.slice(0, 4000);
+        } else if (choice === 'set_type') {
+            const v = await ask('Type ? (boutons / selecteurs)'); if (v===null) return; const low = v.toLowerCase(); settings.type = low.startsWith('s') ? 'Sélecteurs' : 'Boutons';
+        } else if (choice === 'set_category') {
+            const v = await ask('Mentionne la catégorie des tickets ou donne un ID :'); if (v===null) return; const id = v.replace(/[^0-9]/g, ''); const cat = msg.guild.channels.cache.get(id) || msg.mentions.channels.first(); if (!cat || cat.type !== 4) return; settings.categoryId = cat.id;
+        } else if (choice === 'add_option') {
+            const v = await ask('Label de la nouvelle option :'); if (v===null) return; settings.options.push(v.slice(0, 100));
+        } else if (choice === 'del_option') {
+            if (!settings.options.length) return;
+            const v = await ask(`Quel numéro d\'option supprimer ? (1-${settings.options.length})`); if (v===null) return; const idx = parseInt(v,10)-1; if (idx>=0 && idx<settings.options.length) settings.options.splice(idx,1);
+        } else if (choice === 'send_panel') {
+            const channel = settings.panelChannelId ? (msg.guild.channels.cache.get(settings.panelChannelId) || msg.channel) : msg.channel;
+            const panel = new EmbedBuilder().setColor(0xFF0000).setFooter({ text: 'ζ͜͡Nexus Support' });
+            if (settings.title) panel.setTitle(settings.title);
+            if (settings.description) panel.setDescription(settings.description);
+            let components = [];
+            if (settings.type === 'Boutons') {
+                const row = new ActionRowBuilder();
+                for (const label of settings.options.slice(0,5)) {
+                    row.addComponents(new ButtonBuilder().setCustomId(`ticket_open:${label}`).setLabel(label).setStyle(ButtonStyle.Primary));
+                }
+                components = [row];
+            } else {
+                const menu = new StringSelectMenuBuilder().setCustomId('ticket_open_select').setPlaceholder('Choisir').addOptions(settings.options.slice(0,25).map(l => ({ label: l, value: l })));
+                components = [new ActionRowBuilder().addComponents(menu)];
+            }
+            await channel.send({ embeds: [panel], components });
+            await msg.channel.send(`Panel envoyé dans ${channel}`);
+        }
+        try { await sent.edit({ embeds: [buildSettingsEmbed()] }); } catch {}
+    });
+});
 defineCommand('claim', async (msg) => { await msg.channel.send('Claim en cours d\'implémentation.'); });
 defineCommand('add', async (msg) => { await msg.channel.send('Ajout au ticket en cours d\'implémentation.'); });
 defineCommand('del', async (msg) => { await msg.channel.send('Retrait du ticket en cours d\'implémentation.'); });
