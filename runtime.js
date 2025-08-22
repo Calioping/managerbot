@@ -2499,11 +2499,33 @@ defineCommand('backup load', async (msg) => {
 
 // Create emoji
 defineCommand('create', async (msg) => {
-    const parts = msg.content.split(/\s+/).slice(1);
-    const emojiUrl = parts[0];
-    const name = parts[1] || 'custom';
-    if (!emojiUrl) return void msg.channel.send('Usage: +create <image_url> [nom]');
-    try { const e = await msg.guild.emojis.create({ attachment: emojiUrl, name }); await msg.channel.send(`Emoji créé: <:${e.name}:${e.id}>`); } catch { await msg.channel.send('Impossible de créer l\'emoji.'); }
+    const args = msg.content.split(/\s+/).slice(1);
+    const emojiInput = args[0] || '';
+    const name = args.slice(1).join(' ') || 'custom';
+    if (!emojiInput) return void msg.channel.send('Veuillez entrer un emoji valide.');
+
+    // Try custom emoji format <a:name:id>
+    const m = emojiInput.match(/^<a?:([A-Za-z0-9_]+):(\d+)>$/);
+    try {
+        if (m) {
+            const id = m[2];
+            const url = `https://cdn.discordapp.com/emojis/${id}.png?quality=lossless`;
+            await msg.guild.emojis.create({ attachment: url, name });
+            return void msg.channel.send("L'emoji a été créé avec succès.");
+        }
+        // Try unicode emoji rendered to Twemoji CDN fallback is not supported directly; must reject
+        // If it's a standard unicode emoji, Discord API cannot create it as custom; require an image URL
+        if (/^\p{Extended_Pictographic}$/u.test(emojiInput)) {
+            return void msg.channel.send('Veuillez entrer un emoji custom ou une image URL.');
+        }
+        // Otherwise treat as URL
+        const url = emojiInput;
+        if (!/^https?:\/\//i.test(url)) return void msg.channel.send('Veuillez entrer un emoji valide.');
+        await msg.guild.emojis.create({ attachment: url, name });
+        return void msg.channel.send("L'emoji a été créé avec succès.");
+    } catch {
+        return void msg.channel.send('Veuillez entrer un emoji valide.');
+    }
 });
 
 // News ticker, mass role, sync (stubs)
