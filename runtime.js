@@ -2387,7 +2387,7 @@ defineCommand('backup delete', async (msg) => {
                           ])
                 );
             await msg.channel.send({ embeds: [done] });
-            await msg.channel.send(`Cet backup de ${type === 'emoji' ? 'emojis' : 'serveur'} a bien été supprimée.`);
+            await msg.channel.send(`Cette backup ${type === 'emoji' ? "d'emojis" : 'de serveur'} a bien été supprimée.`);
         });
     } catch {
         await msg.channel.send('Impossible d\'initialiser la suppression.');
