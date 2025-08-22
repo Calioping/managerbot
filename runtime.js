@@ -1725,7 +1725,16 @@ defineCommand('unlock', async (msg) => {
 });
 defineCommand('lockall', async (msg) => { for (const ch of msg.guild.channels.cache.values()) { try { await ch.permissionOverwrites.edit(msg.guild.roles.everyone, { SendMessages: false }); } catch {} } await msg.react('✅'); });
 defineCommand('unlockall', async (msg) => { for (const ch of msg.guild.channels.cache.values()) { try { await ch.permissionOverwrites.edit(msg.guild.roles.everyone, { SendMessages: true }); } catch {} } await msg.react('✅'); });
-defineCommand('mute', async (msg) => { const m = msg.mentions.members.first(); const cfg = getGuildConfig(msg.guild.id); if (!m||!cfg.settings.moderation.muteroleId) return void msg.channel.send('Usage: +mute @membre (muterole requis)'); await m.roles.add(cfg.settings.moderation.muteroleId).catch(()=>{}); await msg.react('✅'); });
+defineCommand('mute', async (msg) => {
+	if (!msg.guild) return;
+	const cfg = getGuildConfig(msg.guild.id);
+	const m = msg.mentions.members.first();
+	const args = msg.content.split(/\s+/).slice(2);
+	const reason = args.join(' ').trim() || 'Aucune';
+	if (!m || !cfg.settings.moderation.muteroleId) return void msg.channel.send('Usage: +mute @membre [raison] (muterole requis)');
+	await m.roles.add(cfg.settings.moderation.muteroleId).catch(()=>{});
+	await msg.channel.send(`${m} a été mute pour \`${reason}\``);
+});
 defineCommand('unmute', async (msg) => { const m = msg.mentions.members.first(); const cfg = getGuildConfig(msg.guild.id); if (!m||!cfg.settings.moderation.muteroleId) return void msg.channel.send('Usage: +unmute @membre'); await m.roles.remove(cfg.settings.moderation.muteroleId).catch(()=>{}); await msg.react('✅'); });
 defineCommand('unmuteall', async (msg) => { const cfg = getGuildConfig(msg.guild.id); if (!cfg.settings.moderation.muteroleId) return; const mems = await msg.guild.members.fetch(); for (const m of mems.values()) { try { await m.roles.remove(cfg.settings.moderation.muteroleId); } catch {} } await msg.react('✅'); });
 defineCommand('mutelist', async (msg) => { const cfg = getGuildConfig(msg.guild.id); if (!cfg.settings.moderation.muteroleId) return void msg.channel.send('Aucun muterole.'); const role = msg.guild.roles.cache.get(cfg.settings.moderation.muteroleId); const list = (await msg.guild.members.fetch()).filter(m => role && m.roles.cache.has(role.id)); await msg.channel.send('Mutés: ' + list.map(m=>m.user.tag).join(', ').slice(0,1900)); });
