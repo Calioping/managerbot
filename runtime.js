@@ -106,7 +106,8 @@ function getGuildConfig(gid) {
                 moderation: { timeout: true, clearLimit: 200, muteroleId: null },
                 automod: { antilink: { enabled: false, mode: 'invite' }, antispam: { enabled: false, msgs: 5, perMs: 6000 }, antimassmention: { enabled: false, max: 5 }, antibadword: { enabled: false, words: [] }, piconly: { channelIds: [] } },
                 antiraid: { level: 'off', raidlogChannelId: null, raidpingRoleId: null, antibot: false, antiwebhook: false, antirole: false, antichannel: false, antiupdate: false, antiunban: false, antieveryone: false, punition: 'kick', creationLimitMs: 0, whitelist: { users: [], roles: [] } },
-                permLevels: { '1': [], '2': [], '3': [], '4': [], '5': [], '6': [], '9': [] }
+                permLevels: { '1': [], '2': [], '3': [], '4': [], '5': [], '6': [], '9': [] },
+                permCommands: { '1': [], '2': [], '3': [], '4': [], '5': [], '6': [], '9': [] }
             }
         };
         writeStore(db);
@@ -2948,5 +2949,37 @@ client.on('messageCreate', async (message) => {
 });
 
 client.login(TOKEN);
+
+// Extend perms: manage per-level command allowlists
+defineCommand('perm addcmd', async (msg) => {
+    if (!requireOwner(msg)) return;
+    const args = msg.content.split(/\s+/).slice(2);
+    const level = args.shift();
+    const cmd = args.join(' ').trim().toLowerCase();
+    if (!/^([1-6]|9)$/.test(level) || !cmd) return void msg.channel.send('Usage: +perm addcmd <niveau(1-9)> <commande>');
+    const cfg = getGuildConfig(msg.guild.id);
+    cfg.settings.permCommands = cfg.settings.permCommands || { '1': [], '2': [], '3': [], '4': [], '5': [], '6': [], '9': [] };
+    const arr = cfg.settings.permCommands[level];
+    if (!arr.includes(cmd)) arr.push(cmd);
+    saveGuildConfig(msg.guild.id, cfg);
+    await msg.channel.send(`Commande ajoutée au niveau ${level}.`);
+});
+
+defineCommand('perm delcmd', async (msg) => {
+    if (!requireOwner(msg)) return;
+    const args = msg.content.split(/\s+/).slice(2);
+    const level = args.shift();
+    const cmd = args.join(' ').trim().toLowerCase();
+    if (!/^([1-6]|9)$/.test(level) || !cmd) return void msg.channel.send('Usage: +perm delcmd <niveau(1-9)> <commande>');
+    const cfg = getGuildConfig(msg.guild.id);
+    cfg.settings.permCommands = cfg.settings.permCommands || { '1': [], '2': [], '3': [], '4': [], '5': [], '6': [], '9': [] };
+    cfg.settings.permCommands[level] = (cfg.settings.permCommands[level] || []).filter(c => c !== cmd);
+    saveGuildConfig(msg.guild.id, cfg);
+    await msg.channel.send(`Commande retirée du niveau ${level}.`);
+});
+
+// Update perms display to include commands per level
+// (Hooked in the existing +perms command above)
+// ... existing code ...
 
 
