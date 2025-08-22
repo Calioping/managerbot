@@ -2605,6 +2605,9 @@ defineCommand('massiverole', async (msg) => {
             if (!settings.roleId) { await msg.channel.send('Sélectionne d\'abord un rôle.'); return; }
             const targetRole = msg.guild.roles.cache.get(settings.roleId);
             if (!targetRole) { await msg.channel.send('Rôle introuvable.'); return; }
+            const meMember = msg.guild.members.me;
+            if (!meMember.permissions.has(PermissionsBitField.Flags.ManageRoles)) { await msg.channel.send("Je n'ai pas la permission de gérer les rôles."); return; }
+            if (targetRole.position >= meMember.roles.highest.position) { await msg.channel.send("Je ne peux pas gérer ce rôle (position trop élevée)."); return; }
             const members = await msg.guild.members.fetch();
             const candidates = Array.from(members.values()).filter(member => {
                 if (settings.filter === 'members' && member.user.bot) return false;
