@@ -287,9 +287,10 @@ const HELP_CATEGORIES = {
         { cmd: '+join settings', desc: 'Permet de paramétrer les actions à effectuer quand un membre rejoint le serveur' },
         { cmd: '+leave settings', desc: 'Permet de paramétrer les actions à effectuer quand un membre quitte le serveur' },
         { cmd: '+soutien', desc: 'Permet de donner automatiquement un rôle aux membres ayant un message dans leurs statuts' },
-        { cmd: '+set perm <permission> <rôle>', desc: 'Donne l\'accès à un niveau de permission à un rôle' },
-        { cmd: '+del perm <rôle>', desc: 'Supprime les permissions du bot à un ou plusieurs rôles' },
-        { cmd: '+clear perms', desc: 'Supprime toutes les permissions du bot pour tous les rôles' },
+        { cmd: '+set perm <niveau> <rôle>', desc: 'Assigne un rôle au niveau de permission (1-9)' },
+        { cmd: '+perms', desc: 'Affiche les rôles par niveaux (1,2,3,4,5,6,9)' },
+        { cmd: '+perm addcmd <niveau> <commande>', desc: 'Autorise une commande pour un niveau' },
+        { cmd: '+perm delcmd <niveau> <commande>', desc: 'Retire une commande autorisée pour un niveau' },
         { cmd: '+show pic', desc: 'Permet d\'envoyer automatiquement les photos de profils de membres aléatoires dans un salon' },
         { cmd: '+autopublish <on/off>', desc: 'Active/désactive la publication automatique des messages dans les salons d\'annonces' }
     ],
