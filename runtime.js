@@ -2266,20 +2266,43 @@ defineCommand('backup list', async (msg) => {
         }
         if (!items.length) return void msg.channel.send('Aucune backup.');
 
-        // Show up to 10 latest
-        const embeds = [];
-        for (const it of items.sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)).slice(0,10)) {
-            const e = new EmbedBuilder()
-                .setTitle(it.type === 'emoji' ? 'Backup Emoji' : 'Backup Serveur')
+        // Sort newest first
+        items.sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+
+        // Pagination (20 per page)
+        const pageSize = 20;
+        const pages = [];
+        for (let i = 0; i < items.length; i += pageSize) pages.push(items.slice(i, i + pageSize));
+        let page = 0;
+
+        const makeEmbed = (pIdx) => {
+            const slice = pages[pIdx];
+            const title = typeFilter === 'emoji' ? 'Backups Emojis' : typeFilter === 'server' ? 'Backups Serveur' : 'Backups';
+            const desc = slice.map(it => `• ${it.guildName} — \`${it.id}\``).join('\n');
+            return new EmbedBuilder()
+                .setTitle(title)
                 .setColor(0xFF0000)
-                .addFields(
-                    { name: 'Serveur', value: `${it.guildName} (${it.guildId})`, inline: false },
-                    { name: 'ID', value: it.id, inline: true },
-                    { name: 'Créée le', value: new Date(it.createdAt).toLocaleString('fr-FR'), inline: true }
-                );
-            embeds.push(e);
-        }
-        await msg.channel.send({ embeds });
+                .setDescription(desc)
+                .setFooter({ text: `Page ${pIdx+1}/${pages.length}` });
+        };
+
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('bklist_prev').setLabel('<').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('bklist_next').setLabel('>').setStyle(ButtonStyle.Secondary)
+        );
+        const sent = await msg.channel.send({ embeds: [makeEmbed(page)], components: [row] });
+        const collector = sent.createMessageComponentCollector({ time: 3 * 60 * 1000 });
+        collector.on('collect', async (i) => {
+            if (i.user.id !== msg.author.id) return i.reply({ content: 'Seul l\'auteur peut naviguer ici.', ephemeral: true });
+            const id = i.customId;
+            if (id === 'bklist_prev') page = Math.max(0, page - 1);
+            if (id === 'bklist_next') page = Math.min(pages.length - 1, page + 1);
+            const newRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('bklist_prev').setLabel('<').setStyle(ButtonStyle.Secondary).setDisabled(page === 0),
+                new ButtonBuilder().setCustomId('bklist_next').setLabel('>').setStyle(ButtonStyle.Secondary).setDisabled(page === pages.length - 1)
+            );
+            await i.update({ embeds: [makeEmbed(page)], components: [newRow] });
+        });
     } catch {
         await msg.channel.send('Impossible d\'afficher la liste des backups.');
     }
