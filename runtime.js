@@ -2214,13 +2214,50 @@ defineCommand('backup', async (msg) => {
 defineCommand('backup list', async (msg) => {
     try {
         const dir = path.join(process.cwd(), 'data', 'backups');
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         const indexFile = path.join(dir, 'index.json');
-        if (!fs.existsSync(indexFile)) return void msg.channel.send('Aucune backup.');
-        const index = JSON.parse(fs.readFileSync(indexFile, 'utf8'));
-        const items = (index.items || []).filter(x => x.guildId === msg.guild.id);
-        if (!items.length) return void msg.channel.send('Aucune backup pour ce serveur.');
+        const args = msg.content.split(/\s+/).slice(2);
+        const filterArg = (args[0] || '').toLowerCase();
+
+        // Load or rebuild index
+        let index = { items: [] };
+        const rebuild = () => {
+            const items = [];
+            const files = fs.readdirSync(dir).filter(f => f.endsWith('.json') && f !== 'index.json');
+            for (const f of files) {
+                try {
+                    const data = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
+                    const id = f.replace(/\.json$/,'');
+                    const type = data.type || (id.startsWith('emoji_') ? 'emoji' : 'server');
+                    const guildId = data.guildId || 'unknown';
+                    const guildName = data.guildName || 'Inconnu';
+                    const createdAt = data.createdAt || new Date().toISOString();
+                    items.push({ id, type, guildId, guildName, createdAt });
+                } catch {}
+            }
+            return { items };
+        };
+        if (fs.existsSync(indexFile)) {
+            try { index = JSON.parse(fs.readFileSync(indexFile, 'utf8')); } catch { index = { items: [] }; }
+        }
+        if (!index.items || !Array.isArray(index.items) || index.items.length === 0) {
+            index = rebuild();
+            try { fs.writeFileSync(indexFile, JSON.stringify(index, null, 2)); } catch {}
+        }
+
+        // Filter
+        let items = index.items || [];
+        if (filterArg && filterArg !== 'all') {
+            const gid = filterArg.replace(/[^0-9]/g, '');
+            if (gid) items = items.filter(x => x.guildId === gid);
+        } else if (!filterArg) {
+            items = items.filter(x => x.guildId === msg.guild.id);
+        }
+        if (!items.length) return void msg.channel.send('Aucune backup.');
+
+        // Show up to 10 latest
         const embeds = [];
-        for (const it of items.slice(-10).reverse()) {
+        for (const it of items.sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)).slice(0,10)) {
             const e = new EmbedBuilder()
                 .setTitle(it.type === 'emoji' ? 'Backup Emoji' : 'Backup Serveur')
                 .setColor(0xFF0000)
@@ -2231,7 +2268,6 @@ defineCommand('backup list', async (msg) => {
                 );
             embeds.push(e);
         }
-        // Send as multiple embeds (Discord supports up to 10 embeds per message)
         await msg.channel.send({ embeds });
     } catch {
         await msg.channel.send('Impossible d\'afficher la liste des backups.');
