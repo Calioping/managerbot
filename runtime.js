@@ -369,6 +369,7 @@ function buildHelpEmbed(categoryKey, guildId) {
             const preview = cmds.slice(0, 6).map(c => typeof c === 'string' ? `\`+${c}\`` : `\`${c.cmd}\``).join(', ');
             embed.addFields({ name: key, value: preview || '—' });
         }
+        embed.setFooter({ text: 'ζ͜͡Nexus Support' });
         return embed;
     }
     const list = HELP_CATEGORIES[categoryKey] || [];
@@ -421,7 +422,8 @@ function buildHelpEmbed(categoryKey, guildId) {
         parts.push('');
         if (parts.join('\n').length > 3800) break;
     }
-    embed.setDescription(parts.join('\n').slice(0, 4000));
+    embed.setDescription(parts.join('\\n').slice(0, 4000));
+    embed.setFooter({ text: 'ζ͜͡Nexus Support' });
     return embed;
 }
 
@@ -499,7 +501,7 @@ defineCommand('help all', async (msg) => {
             .setTitle(`Help (${p.title})`)
             .setDescription(list + '\n\n' + note)
             .setColor(0xFF0000)
-            .setFooter({ text: `Page ${idx+1}/${pages.length}` });
+            .setFooter({ text: `Page ${idx+1}/${pages.length} • ζ͜͡Nexus Support` });
     };
 
     let page = 0;
@@ -1325,8 +1327,9 @@ defineCommand('owners', async (msg) => {
         }));
         const embed = new EmbedBuilder()
             .setTitle('Liste des owners')
-            .setDescription(entries.join('\n') || '—')
-            .setColor(getThemeColorForGuild(msg.guild.id));
+            .setDescription(entries.join('\\n') || '—')
+            .setColor(getThemeColorForGuild(msg.guild.id))
+            .setFooter({ text: 'ζ͜͡Nexus Support' });
         return embed;
     }
 
@@ -1432,6 +1435,7 @@ defineCommand('bl', async (msg) => {
                 new ButtonBuilder().setCustomId('bl_next').setStyle(ButtonStyle.Secondary).setEmoji('➤').setDisabled(disabledNext)
             );
             const embed = await buildPageEmbedAsync(page);
+            embed.setFooter({ text: 'ζ͜͡Nexus Support' });
             await i.update({ embeds: [embed], components: [newRow] });
         });
         return;
